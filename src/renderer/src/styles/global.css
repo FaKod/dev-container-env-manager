@@ -496,34 +496,6 @@ html, body, #root {
 .port-active   { color: var(--green); }
 .port-inactive { color: var(--overlay0); }
 
-/* ── Service links ─────────────────────────────────────────────────────────── */
-.service-url {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  padding: 3px 0;
-}
-
-.service-url a {
-  color: var(--blue);
-  text-decoration: none;
-  font-family: var(--font-mono);
-  font-size: 11px;
-}
-
-.service-url a:hover { text-decoration: underline; }
-
-.health-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.health-dot.healthy   { background: var(--green); }
-.health-dot.unhealthy { background: var(--red); }
-.health-dot.unknown   { background: var(--overlay0); }
-
 /* ── Log viewer ────────────────────────────────────────────────────────────── */
 .log-viewer {
   width: 380px;

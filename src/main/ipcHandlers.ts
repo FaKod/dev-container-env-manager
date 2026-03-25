@@ -1,11 +1,10 @@
-import { ipcMain, shell, dialog } from 'electron'
+import { ipcMain, dialog } from 'electron'
 import { writeFileSync } from 'fs'
 import type { BrowserWindow } from 'electron'
 import type { ProfileManager } from './managers/ProfileManager'
 import type { ConnectionManager } from './managers/ConnectionManager'
 import type { TerminalManager } from './managers/TerminalManager'
 import type { ContainerManager } from './managers/ContainerManager'
-import type { HealthCheckManager } from './managers/HealthCheckManager'
 import type { EventLogManager } from './managers/EventLogManager'
 import type { TerminalContext } from '../shared/types'
 
@@ -15,7 +14,6 @@ interface SetupOptions {
   connectionManager: ConnectionManager
   terminalManager: TerminalManager
   containerManager: ContainerManager
-  healthCheckManager: HealthCheckManager
   eventLogManager: EventLogManager
 }
 
@@ -26,7 +24,6 @@ export function setupIpcHandlers(opts: SetupOptions): void {
     connectionManager,
     terminalManager,
     containerManager,
-    healthCheckManager,
     eventLogManager
   } = opts
 
@@ -43,7 +40,6 @@ export function setupIpcHandlers(opts: SetupOptions): void {
   ipcMain.handle('profile:delete', (_e, id: string) => {
     connectionManager.disconnect(id).catch(() => {})
     terminalManager.destroyForProfile(id)
-    healthCheckManager.stopChecks(id)
     profileManager.delete(id)
   })
 
@@ -107,15 +103,12 @@ export function setupIpcHandlers(opts: SetupOptions): void {
       const finalStatus = await containerManager.getStatus(profile)
       mainWindow.webContents.send('container:stateChanged', profileId, finalStatus)
     }
-
-    healthCheckManager.startChecks(profile, mainWindow)
   })
 
   ipcMain.handle('connection:connect', async (_e, profileId: string) => {
     const profile = profileManager.getById(profileId)
     if (!profile) throw new Error(`Profile ${profileId} not found`)
     await connectionManager.connect(profile, mainWindow)
-    healthCheckManager.startChecks(profile, mainWindow)
   })
 
   ipcMain.handle('connection:disconnect', async (_e, profileId: string) => {
@@ -136,7 +129,6 @@ export function setupIpcHandlers(opts: SetupOptions): void {
       } catch { /* ignore stop errors on disconnect */ }
     }
     await connectionManager.disconnect(profileId)
-    healthCheckManager.stopChecks(profileId)
   })
 
   ipcMain.handle('connection:state', (_e, profileId: string) =>
@@ -249,14 +241,6 @@ export function setupIpcHandlers(opts: SetupOptions): void {
       identityFile: string | undefined,
       image: string
     ) => containerManager.detectImagePorts(host, user, port, identityFile, image)
-  )
-
-  // ─── Services ──────────────────────────────────────────────────────────────
-
-  ipcMain.handle('service:open', (_e, url: string) => shell.openExternal(url))
-
-  ipcMain.handle('service:health', (_e, profileId: string) =>
-    healthCheckManager.getHealth(profileId)
   )
 
   // ─── Logs ──────────────────────────────────────────────────────────────────

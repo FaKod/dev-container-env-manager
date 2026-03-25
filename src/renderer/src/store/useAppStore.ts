@@ -4,7 +4,6 @@ import type {
   ConnectionState,
   ContainerState,
   TerminalSession,
-  ServiceHealth,
   LogEntry
 } from '../../../shared/types'
 
@@ -14,7 +13,6 @@ interface AppStore {
   connections: Record<string, ConnectionState>
   containers: Record<string, ContainerState>
   terminals: TerminalSession[]
-  serviceHealth: Record<string, ServiceHealth[]>
   logs: LogEntry[]
 
   // ── UI state ────────────────────────────────────────────────────────────────
@@ -42,9 +40,6 @@ interface AppStore {
   markTerminalUnread: (id: string) => void
   markTerminalRead: (id: string) => void
 
-  setServiceHealth: (profileId: string, health: ServiceHealth[]) => void
-  updateServiceHealth: (profileId: string, health: ServiceHealth) => void
-
   addLog: (entry: LogEntry) => void
   setLogs: (logs: LogEntry[]) => void
 
@@ -63,7 +58,6 @@ export const useAppStore = create<AppStore>((set) => ({
   connections: {},
   containers: {},
   terminals: [],
-  serviceHealth: {},
   logs: [],
 
   activeProfileId: null,
@@ -129,18 +123,6 @@ export const useAppStore = create<AppStore>((set) => ({
     set((s) => ({
       terminals: s.terminals.map((t) => (t.id === id ? { ...t, hasUnread: false } : t))
     })),
-
-  setServiceHealth: (profileId, health) =>
-    set((s) => ({ serviceHealth: { ...s.serviceHealth, [profileId]: health } })),
-
-  updateServiceHealth: (profileId, health) =>
-    set((s) => {
-      const existing = s.serviceHealth[profileId] ?? []
-      const updated = existing.some((h) => h.url === health.url)
-        ? existing.map((h) => (h.url === health.url ? health : h))
-        : [...existing, health]
-      return { serviceHealth: { ...s.serviceHealth, [profileId]: updated } }
-    }),
 
   addLog: (entry) =>
     set((s) => {

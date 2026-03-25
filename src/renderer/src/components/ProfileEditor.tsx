@@ -31,7 +31,6 @@ function emptyDraft(): DraftProfile {
       workdir: '/workspace',
       interactive: true
     },
-    service: { urls: [], healthcheckPath: '/' },
     connectionPolicy: {
       autoReconnect: true,
       preventDuplicateConnections: true,
@@ -55,9 +54,6 @@ function profileToDraft(p: Profile): DraftProfile {
           env: p.container.env ? { ...p.container.env } : undefined
         }
       : emptyDraft().container,
-    service: p.service
-      ? { ...p.service, urls: [...(p.service.urls ?? [])] }
-      : { urls: [], healthcheckPath: '/' },
     connectionPolicy: { ...p.connectionPolicy },
     workspace: p.workspace ? { ...p.workspace } : {}
   }
@@ -73,7 +69,7 @@ export function ProfileEditor(): React.ReactElement {
   const [draft, setDraft] = useState<DraftProfile>(
     existing ? profileToDraft(existing) : emptyDraft()
   )
-  const [activeTab, setActiveTab] = useState<'general' | 'ssh' | 'container' | 'service' | 'policy'>('general')
+  const [activeTab, setActiveTab] = useState<'general' | 'ssh' | 'container' | 'policy'>('general')
   const [saving, setSaving] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
   const firstInputRef = useRef<HTMLInputElement>(null)
@@ -141,7 +137,7 @@ export function ProfileEditor(): React.ReactElement {
     if (e.target === e.currentTarget) handleClose()
   }
 
-  const tabs = ['general', 'ssh', 'container', 'service', 'policy'] as const
+  const tabs = ['general', 'ssh', 'container', 'policy'] as const
 
   return (
     <div className="modal-overlay" onClick={handleOverlayClick}>
@@ -183,9 +179,6 @@ export function ProfileEditor(): React.ReactElement {
           )}
           {activeTab === 'container' && (
             <ContainerTab draft={draft} onChange={set} />
-          )}
-          {activeTab === 'service' && (
-            <ServiceTab draft={draft} onChange={set} />
           )}
           {activeTab === 'policy' && (
             <PolicyTab draft={draft} onChange={set} />
@@ -571,61 +564,6 @@ function ContainerTab({ draft, onChange }: TabProps): React.ReactElement {
       </div>
       <div style={{ fontSize: 11, color: 'var(--overlay1)', marginTop: 8 }}>
         Port mappings (<code>-p</code>) are derived automatically from the ports configured on the General tab.
-      </div>
-    </div>
-  )
-}
-
-function ServiceTab({ draft, onChange }: TabProps): React.ReactElement {
-  const s = draft.service ?? { urls: [], healthcheckPath: '/' }
-
-  const [urlInput, setUrlInput] = useState('')
-
-  function addUrl(): void {
-    if (!urlInput.trim()) return
-    onChange('service', { ...s, urls: [...s.urls, urlInput.trim()] })
-    setUrlInput('')
-  }
-
-  function removeUrl(i: number): void {
-    onChange('service', { ...s, urls: s.urls.filter((_, idx) => idx !== i) })
-  }
-
-  return (
-    <div className="form-section">
-      <div className="form-section-title">Service URLs</div>
-      {s.urls.map((url, i) => (
-        <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <input
-            className="form-control mono"
-            value={url}
-            onChange={(e) => {
-              const urls = [...s.urls]
-              urls[i] = e.target.value
-              onChange('service', { ...s, urls })
-            }}
-          />
-          <button className="btn btn-icon" onClick={() => removeUrl(i)}>✕</button>
-        </div>
-      ))}
-      <div style={{ display: 'flex', gap: 6 }}>
-        <input
-          className="form-control mono"
-          value={urlInput}
-          onChange={(e) => setUrlInput(e.target.value)}
-          placeholder="http://localhost:3000"
-          onKeyDown={(e) => e.key === 'Enter' && addUrl()}
-        />
-        <button className="btn btn-ghost btn-sm" onClick={addUrl}>Add</button>
-      </div>
-      <div className="form-group" style={{ marginTop: 8 }}>
-        <label>Health Check Path</label>
-        <input
-          className="form-control mono"
-          value={s.healthcheckPath ?? '/'}
-          onChange={(e) => onChange('service', { ...s, healthcheckPath: e.target.value })}
-          placeholder="/"
-        />
       </div>
     </div>
   )

@@ -4,7 +4,6 @@ import { ProfileManager } from './managers/ProfileManager'
 import { ConnectionManager } from './managers/ConnectionManager'
 import { TerminalManager } from './managers/TerminalManager'
 import { ContainerManager } from './managers/ContainerManager'
-import { HealthCheckManager } from './managers/HealthCheckManager'
 import { EventLogManager } from './managers/EventLogManager'
 import { setupIpcHandlers } from './ipcHandlers'
 
@@ -15,7 +14,6 @@ const profileManager = new ProfileManager()
 const connectionManager = new ConnectionManager(eventLogManager)
 const terminalManager = new TerminalManager(eventLogManager)
 const containerManager = new ContainerManager(eventLogManager)
-const healthCheckManager = new HealthCheckManager(eventLogManager)
 
 // ─── Window creation ──────────────────────────────────────────────────────────
 
@@ -58,7 +56,6 @@ function createWindow(): void {
     connectionManager,
     terminalManager,
     containerManager,
-    healthCheckManager,
     eventLogManager
   })
 
@@ -77,6 +74,5 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', async () => {
   await connectionManager.disconnectAll()
-  healthCheckManager.stopAll()
   if (process.platform !== 'darwin') app.quit()
 })

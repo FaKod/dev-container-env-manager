@@ -9,13 +9,12 @@ interface Props {
 }
 
 export function StatusPanel({ profileId }: Props): React.ReactElement {
-  const { profiles, connections, containers, serviceHealth, setContainerState, addTerminal, setActiveTerminal } =
+  const { profiles, connections, containers, setContainerState, addTerminal, setActiveTerminal } =
     useAppStore()
 
   const profile = profiles.find((p) => p.id === profileId)
   const connState = connections[profileId]
   const containerState = containers[profileId]
-  const health = serviceHealth[profileId] ?? []
 
   const [containerBusy, setContainerBusy] = useState(false)
 
@@ -221,38 +220,6 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
         </div>
       )}
 
-      {/* Services */}
-      {(profile.service?.urls?.length ?? 0) > 0 && (
-        <div className="status-section">
-          <div className="status-section-title">Services</div>
-          {profile.service!.urls.map((url, i) => {
-            const h = health.find((x) => x.url === url)
-            return (
-              <div key={i} className="service-url">
-                <span
-                  className={`health-dot ${
-                    h == null ? 'unknown' : h.healthy ? 'healthy' : 'unhealthy'
-                  }`}
-                />
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    window.api.openServiceUrl(url)
-                  }}
-                >
-                  {url}
-                </a>
-                {h?.statusCode && (
-                  <span style={{ fontSize: 10, color: 'var(--overlay0)' }}>
-                    {h.statusCode}
-                  </span>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
     </div>
   )
 }

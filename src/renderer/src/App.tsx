@@ -18,7 +18,6 @@ export default function App(): React.ReactElement {
     setProfiles,
     setConnectionState,
     setContainerState,
-    updateServiceHealth,
     addLog
   } = useAppStore()
 
@@ -40,9 +39,6 @@ export default function App(): React.ReactElement {
       }),
       window.api.onContainerStateChanged((profileId, state) => {
         setContainerState(profileId, state)
-      }),
-      window.api.onServiceHealthChanged((profileId, health) => {
-        updateServiceHealth(profileId, health)
       }),
       window.api.onLogEntry((entry) => {
         addLog(entry)

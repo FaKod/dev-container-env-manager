@@ -5,7 +5,6 @@ import type {
   ContainerState,
   TerminalContext,
   TerminalSession,
-  ServiceHealth,
   LogEntry
 } from '../shared/types'
 
@@ -107,12 +106,6 @@ const api = {
   ): Promise<number[]> =>
     ipcRenderer.invoke('container:detectPorts', host, user, port, identityFile, image),
 
-  // ── Services ──────────────────────────────────────────────────────────────
-  openServiceUrl: (url: string): Promise<void> => ipcRenderer.invoke('service:open', url),
-
-  getServiceHealth: (profileId: string): Promise<ServiceHealth[]> =>
-    ipcRenderer.invoke('service:health', profileId),
-
   // ── Logs ──────────────────────────────────────────────────────────────────
   getLogs: (profileId?: string): Promise<LogEntry[]> =>
     ipcRenderer.invoke('log:getAll', profileId),
@@ -168,18 +161,6 @@ const api = {
     ) => callback(profileId, state)
     ipcRenderer.on('container:stateChanged', handler)
     return () => ipcRenderer.removeListener('container:stateChanged', handler)
-  },
-
-  onServiceHealthChanged: (
-    callback: (profileId: string, health: ServiceHealth) => void
-  ): (() => void) => {
-    const handler = (
-      _e: Electron.IpcRendererEvent,
-      profileId: string,
-      health: ServiceHealth
-    ) => callback(profileId, health)
-    ipcRenderer.on('service:healthChanged', handler)
-    return () => ipcRenderer.removeListener('service:healthChanged', handler)
   },
 
   onLogEntry: (callback: (entry: LogEntry) => void): (() => void) => {

@@ -48,11 +48,6 @@ export interface TerminalConfig {
   keepVisibleWhenDisconnected?: boolean
 }
 
-export interface ServiceConfig {
-  urls: string[]
-  healthcheckPath?: string
-}
-
 export interface ConnectionPolicy {
   autoReconnect?: boolean
   preventDuplicateConnections?: boolean
@@ -74,7 +69,6 @@ export interface Profile {
   ssh: SSHConfig
   container?: ContainerConfig
   terminal: TerminalConfig
-  service?: ServiceConfig
   connectionPolicy: ConnectionPolicy
   workspace?: WorkspaceConfig
   createdAt: string
@@ -133,16 +127,6 @@ export interface TerminalSession {
   title: string
   active: boolean
   hasUnread?: boolean
-}
-
-// ─── Service Health ───────────────────────────────────────────────────────────
-
-export interface ServiceHealth {
-  url: string
-  healthy: boolean
-  lastChecked?: string
-  statusCode?: number
-  error?: string
 }
 
 // ─── Logs ─────────────────────────────────────────────────────────────────────
