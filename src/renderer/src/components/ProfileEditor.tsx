@@ -385,18 +385,6 @@ function GeneralTab({ draft, onChange, firstInputRef }: TabProps): React.ReactEl
           Keep terminal visible when disconnected
         </label>
       </div>
-      <div className="form-section-title" style={{ marginTop: 8 }}>Workspace</div>
-      <div className="form-group">
-        <label>Local Workspace Path</label>
-        <input
-          className="form-control mono"
-          value={draft.workspace?.localPath ?? ''}
-          onChange={(e) =>
-            onChange('workspace', { ...draft.workspace, localPath: e.target.value })
-          }
-          placeholder="/home/user/projects/myproject"
-        />
-      </div>
     </div>
   )
 }
