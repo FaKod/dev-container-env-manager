@@ -7,13 +7,15 @@ export function TerminalTabs(): React.ReactElement {
   const {
     terminals,
     activeTerminalId,
+    splitSession,
     activeProfileId,
     profiles,
     setActiveTerminal,
     setActiveProfile,
     removeTerminal,
     addTerminal,
-    markTerminalRead
+    markTerminalRead,
+    setSplitSession
   } = useAppStore()
 
   async function handleCloseTab(
@@ -23,6 +25,20 @@ export function TerminalTabs(): React.ReactElement {
     e.stopPropagation()
     await window.api.destroyTerminal(terminalId)
     removeTerminal(terminalId)
+  }
+
+  async function handleSplit(direction: 'vertical' | 'horizontal'): Promise<void> {
+    if (!activeTerminalId || !activeProfileId) return
+    const profile = profiles.find((p) => p.id === activeProfileId)
+    if (!profile) return
+    const ctx: TerminalContext = profile.terminal.defaultContext
+    try {
+      const session = await window.api.createTerminal(activeProfileId, ctx, 120, 36)
+      // Do NOT add to terminals[] — split sessions are hidden from the tab bar
+      setSplitSession(session, direction)
+    } catch (err) {
+      toast(`Failed to split terminal: ${err}`)
+    }
   }
 
   async function handleAddTab(): Promise<void> {
@@ -39,7 +55,12 @@ export function TerminalTabs(): React.ReactElement {
     }
   }
 
-  function handleTabClick(terminalId: string, profileId: string): void {
+  async function handleTabClick(terminalId: string, profileId: string): Promise<void> {
+    // Destroy the split session's PTY when switching tabs
+    if (splitSession) {
+      await window.api.destroyTerminal(splitSession.id)
+      setSplitSession(null)
+    }
     setActiveTerminal(terminalId)
     setActiveProfile(profileId)
     markTerminalRead(terminalId)
@@ -69,6 +90,25 @@ export function TerminalTabs(): React.ReactElement {
           </button>
         </div>
       ))}
+
+      {activeTerminalId && !splitSession && (
+        <>
+          <div
+            className="terminal-tabs-add"
+            onClick={() => handleSplit('vertical')}
+            title="Split vertical (new login)"
+          >
+            ⊢
+          </div>
+          <div
+            className="terminal-tabs-add"
+            onClick={() => handleSplit('horizontal')}
+            title="Split horizontal (new login)"
+          >
+            ⊤
+          </div>
+        </>
+      )}
 
       {activeProfileId && (
         <div

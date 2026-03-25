@@ -18,6 +18,8 @@ interface AppStore {
   // ── UI state ────────────────────────────────────────────────────────────────
   activeProfileId: string | null
   activeTerminalId: string | null
+  splitSession: TerminalSession | null
+  splitDirection: 'vertical' | 'horizontal'
   showProfileEditor: boolean
   editingProfileId: string | null
   showLogViewer: boolean
@@ -45,6 +47,7 @@ interface AppStore {
 
   setActiveProfile: (id: string | null) => void
   setActiveTerminal: (id: string | null) => void
+  setSplitSession: (session: TerminalSession | null, direction?: 'vertical' | 'horizontal') => void
   openProfileEditor: (profileId?: string) => void
   closeProfileEditor: () => void
   toggleLogViewer: () => void
@@ -62,6 +65,8 @@ export const useAppStore = create<AppStore>((set) => ({
 
   activeProfileId: null,
   activeTerminalId: null,
+  splitSession: null,
+  splitDirection: 'vertical' as const,
   showProfileEditor: false,
   editingProfileId: null,
   showLogViewer: false,
@@ -135,6 +140,9 @@ export const useAppStore = create<AppStore>((set) => ({
   setActiveProfile: (id) => set({ activeProfileId: id }),
 
   setActiveTerminal: (id) => set({ activeTerminalId: id }),
+
+  setSplitSession: (session, direction = 'vertical') =>
+    set({ splitSession: session, splitDirection: direction }),
 
   openProfileEditor: (profileId) =>
     set({ showProfileEditor: true, editingProfileId: profileId ?? null }),

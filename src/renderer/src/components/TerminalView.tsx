@@ -303,8 +303,21 @@ function TerminalPane({ session, visible }: TerminalPaneProps): React.ReactEleme
 
 // ── TerminalView ───────────────────────────────────────────────────────────────
 
+function fitAll(ids: string[]): void {
+  for (const id of ids) {
+    const inst = terminalInstances.get(id)
+    if (!inst) continue
+    requestAnimationFrame(() => {
+      inst.fitAddon.fit()
+      window.api.terminalResize(id, inst.xterm.cols, inst.xterm.rows)
+    })
+  }
+}
+
 export function TerminalView(): React.ReactElement {
-  const { terminals, activeTerminalId, theme } = useAppStore()
+  const { terminals, activeTerminalId, splitSession, splitDirection, setSplitSession, theme } = useAppStore()
+  const [splitRatio, setSplitRatio] = useState(0.5)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   // Update all open terminal themes when the theme changes
   useEffect(() => {
@@ -313,6 +326,41 @@ export function TerminalView(): React.ReactElement {
       inst.xterm.options.theme = t
     }
   }, [theme])
+
+  const handleDividerMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      const container = containerRef.current
+      if (!container) return
+      const rect = container.getBoundingClientRect()
+
+      const onMouseMove = (ev: MouseEvent): void => {
+        const ratio = splitDirection === 'vertical'
+          ? Math.min(0.85, Math.max(0.15, (ev.clientX - rect.left) / rect.width))
+          : Math.min(0.85, Math.max(0.15, (ev.clientY - rect.top) / rect.height))
+        setSplitRatio(ratio)
+        if (activeTerminalId) fitAll([activeTerminalId])
+        if (splitSession) fitAll([splitSession.id])
+      }
+
+      const onMouseUp = (): void => {
+        window.removeEventListener('mousemove', onMouseMove)
+        window.removeEventListener('mouseup', onMouseUp)
+      }
+
+      window.addEventListener('mousemove', onMouseMove)
+      window.addEventListener('mouseup', onMouseUp)
+    },
+    [activeTerminalId, splitSession, splitDirection]
+  )
+
+  async function handleCloseSplit(): Promise<void> {
+    if (!splitSession) return
+    await window.api.destroyTerminal(splitSession.id)
+    setSplitSession(null)
+  }
+
+  const activeSession = terminals.find((t) => t.id === activeTerminalId)
 
   if (terminals.length === 0) {
     return (
@@ -325,23 +373,54 @@ export function TerminalView(): React.ReactElement {
     )
   }
 
+  const isSplit = !!(activeSession && splitSession)
+
   return (
-    <div className="terminal-container" style={{ position: 'relative' }}>
-      {terminals.map((session) => {
-        const isVisible = session.id === activeTerminalId
-        return (
-          <React.Fragment key={session.id}>
-            <TerminalPane session={session} visible={isVisible} />
-            {isVisible && (
-              <div className={`context-breadcrumb ctx-${session.context}`}>
-                {session.context === 'local' && 'LOCAL'}
-                {session.context === 'ssh' && `SSH › ${session.title.split(' — ')[1] ?? ''}`}
-                {session.context === 'container' && `CONTAINER › ${session.title.split(' — ')[1] ?? ''}`}
-              </div>
-            )}
-          </React.Fragment>
-        )
-      })}
+    <div className="terminal-container" ref={containerRef} style={{ position: 'relative' }}>
+      {isSplit ? (
+        <div
+          className="terminal-split-container"
+          style={{ flexDirection: splitDirection === 'vertical' ? 'row' : 'column' }}
+        >
+          <div className="terminal-split-pane" style={{ flex: `${splitRatio} 0 0` }}>
+            <TerminalPane session={activeSession} visible={true} />
+            <div className={`context-breadcrumb ctx-${activeSession.context}`}>
+              {activeSession.context === 'local' && 'LOCAL'}
+              {activeSession.context === 'ssh' && `SSH › ${activeSession.title.split(' — ')[1] ?? ''}`}
+              {activeSession.context === 'container' && `CONTAINER › ${activeSession.title.split(' — ')[1] ?? ''}`}
+            </div>
+          </div>
+          <div
+            className={`terminal-split-divider${splitDirection === 'horizontal' ? ' terminal-split-divider-h' : ''}`}
+            onMouseDown={handleDividerMouseDown}
+          />
+          <div className="terminal-split-pane" style={{ flex: `${1 - splitRatio} 0 0` }}>
+            <TerminalPane session={splitSession} visible={true} />
+            <div className={`context-breadcrumb ctx-${splitSession.context}`}>
+              {splitSession.context === 'local' && 'LOCAL'}
+              {splitSession.context === 'ssh' && `SSH › ${splitSession.title.split(' — ')[1] ?? ''}`}
+              {splitSession.context === 'container' && `CONTAINER › ${splitSession.title.split(' — ')[1] ?? ''}`}
+            </div>
+            <button className="terminal-split-close" onClick={handleCloseSplit} title="Close split">✕</button>
+          </div>
+        </div>
+      ) : (
+        terminals.map((session) => {
+          const isVisible = session.id === activeTerminalId
+          return (
+            <React.Fragment key={session.id}>
+              <TerminalPane session={session} visible={isVisible} />
+              {isVisible && (
+                <div className={`context-breadcrumb ctx-${session.context}`}>
+                  {session.context === 'local' && 'LOCAL'}
+                  {session.context === 'ssh' && `SSH › ${session.title.split(' — ')[1] ?? ''}`}
+                  {session.context === 'container' && `CONTAINER › ${session.title.split(' — ')[1] ?? ''}`}
+                </div>
+              )}
+            </React.Fragment>
+          )
+        })
+      )}
     </div>
   )
 }
