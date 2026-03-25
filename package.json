@@ -1,0 +1,69 @@
+{
+  "name": "devenv-manager",
+  "version": "1.0.0",
+  "description": "Agentic Dev Environment Manager",
+  "author": "DevEnv Manager",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev -- --no-sandbox",
+    "build": "electron-vite build",
+    "start": "electron-vite dev -- --no-sandbox",
+    "preview": "electron . --no-sandbox",
+    "dist": "electron-vite build && CC=x86_64-linux-gnu-gcc CXX=x86_64-linux-gnu-g++ LINK=x86_64-linux-gnu-g++ electron-builder --linux AppImage --x64",
+    "rebuild": "electron-rebuild -f -w node-pty",
+    "postinstall": "electron-rebuild -f -w node-pty"
+  },
+  "build": {
+    "appId": "com.devenv.manager",
+    "productName": "DevEnv Manager",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "node_modules/**/*",
+      "!node_modules/electron/**/*",
+      "!node_modules/electron-builder/**/*",
+      "!node_modules/.cache/**/*"
+    ],
+    "extraMetadata": {
+      "main": "out/main/index.js"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        }
+      ],
+      "category": "Development"
+    },
+    "nativeRebuilder": "legacy"
+  },
+  "dependencies": {
+    "electron-store": "^8.2.0",
+    "node-pty": "^1.0.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.6.0",
+    "electron-builder": "^26.8.1",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/uuid": "^9.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-search": "^0.16.0",
+    "@xterm/addon-web-links": "^0.12.0",
+    "@xterm/xterm": "^5.5.0",
+    "electron": "^41.0.0",
+    "electron-vite": "^2.3.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "typescript": "^5.5.0",
+    "vite": "^5.4.0",
+    "zustand": "^4.5.0"
+  }
+}
