@@ -59,7 +59,7 @@ function createWindow(): void {
     eventLogManager
   })
 
-  eventLogManager.info('App', 'DevEnv Manager started')
+  eventLogManager.info('App', 'FaKods Legendary DevContainer Manager started')
 }
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────

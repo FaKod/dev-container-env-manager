@@ -94,9 +94,16 @@ html, body, #root {
   overflow: hidden;
 }
 
-.sidebar {
+.sidebar-pane {
   width: var(--sidebar-width);
   min-width: var(--sidebar-width);
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+}
+
+.sidebar {
+  flex: 1;
   background: var(--mantle);
   border-right: 1px solid var(--surface0);
   display: flex;
@@ -498,7 +505,7 @@ html, body, #root {
 
 /* ── Log viewer ────────────────────────────────────────────────────────────── */
 .log-viewer {
-  width: 380px;
+  width: 100%;
   border-left: 1px solid var(--surface0);
   display: flex;
   flex-direction: column;
@@ -726,13 +733,29 @@ input[type="checkbox"] { accent-color: var(--blue); }
   color: var(--text);
 }
 
-/* ── Divider ───────────────────────────────────────────────────────────────── */
+/* ── Resize handles ────────────────────────────────────────────────────────── */
 .resize-handle {
   height: 4px;
   cursor: ns-resize;
   background: transparent;
+  flex-shrink: 0;
+  z-index: 10;
 }
 .resize-handle:hover { background: var(--blue); }
+
+.resize-handle-ew {
+  height: auto;
+  width: 4px;
+  cursor: ew-resize;
+}
+
+.resize-handle-sidebar {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 4px;
+}
 
 /* ── Tooltip-like breadcrumb ───────────────────────────────────────────────── */
 .context-breadcrumb {

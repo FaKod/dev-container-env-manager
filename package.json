@@ -2,7 +2,7 @@
   "name": "devenv-manager",
   "version": "1.0.0",
   "description": "Agentic Dev Environment Manager",
-  "author": "DevEnv Manager",
+  "author": "FaKods",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev -- --no-sandbox",
@@ -15,7 +15,7 @@
   },
   "build": {
     "appId": "com.devenv.manager",
-    "productName": "DevEnv Manager",
+    "productName": "FaKods Legendary DevContainer Manager",
     "directories": {
       "buildResources": "build",
       "output": "dist"

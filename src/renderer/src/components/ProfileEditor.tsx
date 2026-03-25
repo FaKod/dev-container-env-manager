@@ -165,7 +165,7 @@ export function ProfileEditor(): React.ReactElement {
                 textTransform: 'capitalize'
               }}
             >
-              {t}
+              {t === 'ssh' ? 'SSH' : t}
             </button>
           ))}
         </div>

@@ -8,6 +8,7 @@ import { LogViewer } from './components/LogViewer'
 import { ProfileEditor } from './components/ProfileEditor'
 import { ToastContainer, toast } from './components/Toast'
 import { ConfirmModal } from './components/ConfirmModal'
+import { useResizablePane } from './hooks/useResizablePane'
 
 export default function App(): React.ReactElement {
   const {
@@ -20,6 +21,10 @@ export default function App(): React.ReactElement {
     setContainerState,
     addLog
   } = useAppStore()
+
+  const { size: sidebarWidth, handleMouseDown: sidebarMouseDown } = useResizablePane(280, 180, 480, 'horizontal')
+  const { size: bottomHeight, handleMouseDown: bottomMouseDown } = useResizablePane(240, 120, 600, 'vertical')
+  const { size: logViewerWidth, handleMouseDown: logViewerMouseDown } = useResizablePane(380, 200, 700, 'horizontal', true)
 
   // ── Apply theme on mount and whenever it changes ──────────────────────────────
   useEffect(() => {
@@ -74,18 +79,25 @@ export default function App(): React.ReactElement {
 
   return (
     <div className="app-layout">
-      <Sidebar />
+      <div className="sidebar-pane" style={{ width: sidebarWidth, minWidth: sidebarWidth }}>
+        <Sidebar />
+        <div className="resize-handle resize-handle-ew resize-handle-sidebar" onMouseDown={sidebarMouseDown} />
+      </div>
       <div className="main-area">
         <TerminalTabs />
         <TerminalView />
+        <div className="resize-handle" onMouseDown={bottomMouseDown} />
         <PanelToggleBar />
         {showLogViewer ? (
-          <div className="bottom-panel">
+          <div className="bottom-panel" style={{ height: bottomHeight, minHeight: bottomHeight }}>
             <StatusPanelArea />
-            <LogViewer />
+            <div className="resize-handle resize-handle-ew" onMouseDown={logViewerMouseDown} />
+            <div style={{ width: logViewerWidth, minWidth: logViewerWidth, overflow: 'hidden', display: 'flex' }}>
+              <LogViewer />
+            </div>
           </div>
         ) : (
-          <div className="bottom-panel">
+          <div className="bottom-panel" style={{ height: bottomHeight, minHeight: bottomHeight }}>
             <StatusPanelArea />
           </div>
         )}
