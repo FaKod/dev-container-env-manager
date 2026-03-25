@@ -1,445 +1,318 @@
-# Agentic Dev Environment Manager - Requirements
+# DevEnv Manager — Application Reference
 
-## Goal
+## What It Is
 
-A desktop app that lets you manage development targets made of:
+A desktop application for managing remote development environments consisting of an SSH tunnel, a Docker container, and an integrated terminal. It makes remote development feel like launching a local app: select a profile, click Connect, and get a managed terminal with full lifecycle control.
 
-- an SSH connection to a remote Linux box
-- one or more port forwards
-- a container startup command tied to a project
-- quick access to the exposed web service
-- an integrated terminal-based view per connected profile
-
-The tool should make remote development feel like launching a local app: select a project, connect, and work immediately with full visibility and control.
+**Stack:** Electron 41 · electron-vite 2 · React 18 · TypeScript · xterm.js · node-pty · electron-store · Zustand
 
 ---
 
-## Core User Story
+## Core Workflow
 
-As a developer, I want to select a project like `aiact-anthropic`, click one button, and have the app:
-
-1. establish the SSH tunnel
-2. verify the remote host is reachable
-3. start, attach to, or recreate the project container as configured
-4. present the connected profile as its own terminal window or terminal tab
-5. expose the right local URL
-6. show logs, status, and controls
-7. manage the lifecycle of the connection cleanly
+1. Create a profile with SSH host, port forwards, and container image
+2. Click **Connect** — the app opens the SSH tunnel and starts or attaches to the container
+3. A terminal tab opens in the container shell immediately
+4. Use the status panel to monitor connection state, port forwards, container status, and service health
+5. Click service URLs to open them in the browser
+6. Disconnect cleanly — container is stopped, SSH tunnel is closed, terminal tabs dim
 
 ---
 
-## Functional Requirements
+## Profiles
 
-### 1. Project Profiles
+Each profile represents one remote development target. Profiles are persisted locally via electron-store.
 
-The application shall support reusable project profiles. Each profile shall contain at least:
+### Fields
 
-- profile name
-- SSH host or alias
-- SSH options and port forwards
-- container runtime settings
-- container name
-- container image
-- workspace mount settings
-- working directory
-- service URLs
-- connection and terminal preferences
+| Section | Fields |
+|---------|--------|
+| **Identity** | `name` (also used as the container name) |
+| **SSH** | `host`, `user`, `port`, `identityFile`, `forwards[]`, `keepalive`, `extraOptions` |
+| **Container** | `image`, `runtime`, `shell`, `workspaceMount`, `workdir`, `env`, `extraArgs`, `interactive` |
+| **Terminal** | `defaultContext` (local / ssh / container), `presentation` (tab), `keepVisibleWhenDisconnected` |
+| **Service** | `urls[]`, `healthcheckPath` |
+| **Connection Policy** | `autoReconnect`, `preventDuplicateConnections`, `existingContainerBehavior`, `reconnectDelay`, `maxReconnectAttempts` |
+| **Workspace** | `localPath`, `recentPaths[]` |
 
-Each profile should be editable, clonable, exportable, and importable.
+### Container name
+The container name always equals the profile name. This is enforced on create and update.
 
----
-
-### 2. Terminal-Centric Profile Presentation
-
-Each connected profile shall be presented as a terminal window, terminal pane, or terminal tab within the application.
-
-Requirements:
-
-- every active profile must have a visible terminal session
-- the terminal must show the live interactive shell for the associated connection or container context
-- users must be able to type directly into the terminal
-- users must be able to open multiple profile terminals at the same time
-- disconnected profiles may remain visible in an inactive state, but connected profiles must always have a terminal representation
-- terminal sessions should support copy/paste, scrolling, resizing, and search
-- terminal sessions should clearly indicate whether the user is currently on the remote host, inside the container, or both through UI labeling or breadcrumbs
-
-The terminal is not just a log viewer. It is a primary interaction surface.
+### Profile operations
+- Create, edit, clone, delete
+- Export single profile as JSON
+- Export all profiles as JSON file (via save dialog)
+- Import single profile or batch from JSON file
+- Original `createdAt` timestamp is preserved on import
 
 ---
 
-### 3. Connection Management
+## Port Forwarding
 
-The application shall explicitly manage connections as first-class objects.
+Each port forward entry has two distinct ports:
 
-Requirements:
+- **Host port** — used as both the SSH local port and remote port: `-L hostPort:localhost:hostPort`. Also the Docker host-side port.
+- **Container port** — the port inside the container for Docker: `-p hostPort:containerPort`.
 
-- create, start, stop, restart, and reconnect SSH connections
-- monitor connection health continuously
-- detect broken tunnels and dropped sessions
-- reconnect automatically according to profile policy
-- prevent duplicate or conflicting connection instances for the same profile unless explicitly allowed
-- show connection state clearly, such as:
-  - disconnected
-  - connecting
-  - connected
-  - degraded
-  - reconnecting
-  - failed
-- allow manual disconnect without leaving orphan processes
-- clean up related subprocesses, tunnels, and terminal resources when a connection is closed
-- support multiple concurrent managed connections
+Multiple forwards per profile are supported. An **Auto-detect** button SSHes to the remote host and reads `EXPOSE` ports from the container image via `docker image inspect`.
 
-The application shall maintain a consistent internal state model so the UI always reflects the actual connection state.
+Active forwards are shown in the status panel with live active/inactive indicators.
 
 ---
 
-### 4. SSH Session Management
+## Connection Management
 
-The app shall support:
+The SSH tunnel runs as a background `ssh -N` process (no interactive shell, port-forwarding only).
 
-- launching SSH sessions from the UI
-- support for SSH config aliases from `~/.ssh/config`
-- support for local port forwards
-- support for multiple forwards per profile
-- stdout and stderr capture
-- optional keepalive behavior
-- known_hosts and host key verification handling using the operating system and SSH tooling
-- integration with existing SSH keys and `ssh-agent`
+### Connection states
 
-Example command pattern:
+| State | Meaning |
+|-------|---------|
+| `disconnected` | No active connection |
+| `connecting` | SSH process spawned, waiting for confirmation |
+| `connected` | Tunnel established and active |
+| `degraded` | Connection assumed established (timeout fallback) |
+| `reconnecting` | Auto-reconnect in progress |
+| `failed` | Max reconnect attempts reached |
 
-```bash
-ssh -L 3000:localhost:3000 spark-7406.tail845a53.ts.net
+### Auto-reconnect
+Configurable per profile: delay, max attempts. Reconnect is scheduled on unexpected SSH process exit. Manual disconnect cancels any pending reconnect.
+
+### Launch vs Connect
+- **Connect** — opens SSH tunnel only
+- **Launch** — opens SSH tunnel AND handles container lifecycle (attach if running, start if stopped, create if not found), then opens a terminal
+
+---
+
+## Container Lifecycle
+
+All container operations run as SSH exec commands on the remote host.
+
+### Operations
+- **Start** — `docker start <name>` (or `docker run` if not found)
+- **Stop** — `docker stop <name>` (also disconnects SSH)
+- **Restart** — `docker restart <name>`, then opens a new terminal
+- **Recreate** — removes and re-runs the container, then opens a new terminal
+- **Delete** — `docker rm -f <name>` with confirmation dialog
+- **Shell** — opens a new terminal tab in the container
+
+### docker run command
+Built from profile data:
+
+```
+docker run -d --interactive --tty
+  [--runtime=<runtime>]
+  --name <profileName>
+  -p hostPort:containerPort   (one per SSH forward)
+  [-v localPath:containerPath]
+  [-w workdir]
+  [-e KEY=VALUE ...]
+  [extraArgs...]
+  <image>
 ```
 
-The application should build and execute such commands safely from structured configuration rather than raw unsanitized strings.
+### Shell auto-detection
+If no `shell` is configured, the app SSHes to the host and runs `docker inspect --format '{{json .Config.Cmd}}' <name>` to determine the container's default command. Falls back to `bash`.
+
+### Container logs
+Accessible via the status panel (last 100 lines via `docker logs --tail 100`).
 
 ---
 
-### 5. Port Forwarding Management
+## Terminals
 
-The app shall support:
+Terminals are powered by xterm.js with node-pty PTY sessions in the main process.
 
-- one or more local-to-remote forwards per profile
-- conflict detection for local ports before connection start
-- visibility into which local ports are active
-- restart of individual port forwards where technically feasible
-- display of mappings such as:
-  - `localhost:3000 -> remote localhost:3000`
-- opening forwarded services in the browser from the UI
+### Contexts
 
----
+| Context | What it opens |
+|---------|--------------|
+| `local` | Local shell (`$SHELL` or `/bin/bash`) |
+| `ssh` | Interactive SSH session to the remote host |
+| `container` | `docker exec -it <name> <shell>` |
 
-### 6. Container Lifecycle Management
+The active context is shown as a breadcrumb overlay (e.g. `CONTAINER › myproject`).
 
-The app shall support container workflows associated with a profile.
+### Tab behaviour
+- Multiple tabs per profile, any mix of contexts
+- Tabs dim (inactive state) when the process exits
+- Blue dot appears on tabs with new unread output
+- Context badge on each tab (local / ssh / container), colour-coded
 
-Requirements:
+### Keyboard shortcuts
 
-- start a container
-- stop a container
-- restart a container
-- remove a container
-- recreate a container
-- attach to a running container
-- open a shell directly in the container
-- stream container logs
-- detect whether a named container already exists
-- determine whether the container is running, stopped, failed, or misconfigured
-- define policy for existing containers:
-  - attach to existing
-  - start existing
-  - remove and recreate
-  - ask according to configuration or policy
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Shift+C` | Copy selection |
+| `Ctrl+Shift+V` | Paste from clipboard |
+| `Ctrl+Shift+F` | Open find bar |
+| `Ctrl++` / `Ctrl+=` | Increase font size |
+| `Ctrl+-` | Decrease font size |
+| `Ctrl+0` | Reset font size (13 px) |
+| `Ctrl+L` | Clear terminal and scrollback |
+| Right-click | Paste from clipboard |
+| Select text | Auto-copy to clipboard |
 
-Example command pattern:
+### Find bar
+`Ctrl+Shift+F` opens a find overlay. `Enter` = next match, `Shift+Enter` = previous, `Esc` = close. Incremental search highlights as you type.
 
-```bash
-docker run --runtime=sysbox-runc \
-  -it --name aiact-anthropic -p 3006:3006 \
-  -v "${PWD}:/workspace" \
-  -w /workspace \
-  quay.io/innoq/claude-dind:latest
-```
-
-The application shall support structured generation of this command from profile data.
+### Configuration
+- Scrollback: 5000 lines
+- Overview ruler: 10 px (scrollbar position indicator)
+- Font size: 8–28 px range, adjustable at runtime
+- Themes: Catppuccin Mocha (dark) and Catppuccin Latte (light), switchable at runtime
 
 ---
 
-### 7. Terminal Context Switching
+## Service Health Monitoring
 
-The terminal attached to a profile shall support clear transitions between:
-
-- local orchestration context
-- remote SSH shell
-- container shell
-
-Requirements:
-
-- users must be able to see which context is active
-- the app should support launching directly into a preferred context
-- users should be able to open additional terminals for the same profile if needed
-- the UI should distinguish between:
-  - connection terminal
-  - container terminal
-  - log terminal or output view
+Configured service URLs are polled via HTTP every 15 seconds. In-flight requests are deduplicated (a new check is skipped if the previous one is still pending). Results are shown in the status panel with healthy/unhealthy indicators and HTTP status codes. Clicking a URL opens it in the system browser.
 
 ---
 
-### 8. Workspace Awareness
+## Event Log
 
-The application shall support association between a local workspace and a project profile.
-
-Requirements:
-
-- pick a local folder
-- persist workspace path
-- mount workspace into container
-- validate that the path exists before launch
-- track recent workspaces
-- optionally derive defaults from the current workspace name
+A structured event log captures all connection, container, and terminal lifecycle events with timestamps and log levels (`info`, `warn`, `error`, `debug`). The log panel is toggled from the bottom bar. Logs can be filtered by profile and cleared.
 
 ---
 
-### 9. Service Access and Health Monitoring
+## UI
 
-The app shall provide:
+### Layout
+- **Sidebar** — profile list with status badges, import/export/theme toggle
+- **Terminal area** — tab bar + full-height terminal panes
+- **Status panel** — SSH state, port forwards, container controls, service health
+- **Log panel** — toggleable event log at the bottom
 
-- one-click opening of local service URLs
-- support for multiple service endpoints per profile
-- configurable health checks
-- visibility into service readiness
-- retry or polling after startup
-- status display for service reachability
+### Notifications
+- Non-blocking toast notifications for errors and confirmations
+- Confirm modal for destructive actions (auto-focuses Cancel, Escape to dismiss)
+- Unsaved-changes warning when closing the profile editor with pending edits
 
-Examples:
-
-- `http://localhost:3000`
-- additional internal service URLs if configured
-
----
-
-### 10. Logs and Observability
-
-The application shall provide observability for the full workflow.
-
-Requirements:
-
-- SSH logs
-- container logs
-- connection lifecycle events
-- timestamps for actions and failures
-- searchable logs
-- export or copy logs
-- separation between interactive terminal content and system event logs
+### Themes
+Dark (Catppuccin Mocha) and light (Catppuccin Latte) themes. Toggle via the ☀/☾ button in the sidebar footer. Theme is persisted across sessions and applied to all open terminals immediately.
 
 ---
 
-### 11. Command Templating and Configuration
-
-The application shall support safe templating of commands and parameters.
-
-Supported variable examples:
-
-- `${projectName}`
-- `${cwd}`
-- `${sshHost}`
-- `${localPort}`
-- `${remotePort}`
-- `${containerName}`
-
-Requirements:
-
-- validation before execution
-- preview of resolved commands when needed
-- safe escaping and argument handling
-- schema validation for profile definitions
-
----
-
-### 12. Secrets and Credential Handling
-
-The app shall not store secrets insecurely.
-
-Requirements:
-
-- prefer system SSH keys
-- integrate with `ssh-agent`
-- store only non-sensitive configuration by default
-- use system keychain or credential store if secret persistence is required
-- do not store plaintext passwords in profile definitions
-- clearly separate secrets from exported profile configuration where possible
-
----
-
-### 13. Profile and Session Persistence
-
-The app shall persist user configuration and session metadata.
-
-Requirements:
-
-- save project profiles locally
-- restore known profiles on app startup
-- optionally restore disconnected terminal tabs or windows
-- remember last connection state and recent actions
-- import and export profile sets as JSON or YAML
-
----
-
-## Non-Functional Requirements
-
-### Reliability
-
-The system shall:
-
-- recover gracefully from dropped SSH sessions
-- avoid orphaned SSH or Docker processes
-- handle slow starts and partial failures
-- provide actionable error messages
-- keep internal state synchronized with actual process state
-
-### Security
-
-The system shall:
-
-- avoid plaintext secret storage
-- sanitize all command execution paths
-- clearly distinguish local execution from remote execution
-- rely on existing SSH trust mechanisms where possible
-- prevent renderer-driven arbitrary command execution in the desktop UI architecture
-
-### Usability
-
-The system shall:
-
-- provide one-click or low-friction startup for each profile
-- make terminal windows central to the experience
-- show clear status indicators for connection, tunnel, container, and service health
-- support efficient keyboard-driven workflows
-- minimize manual terminal setup steps
-
-### Portability
-
-If implemented as an Electron app, it should run on:
-
-- Linux
-- macOS
-
-Windows support may be considered later, but is not a primary requirement.
-
-### Extensibility
-
-The design should allow future support for:
-
-- Podman
-- Docker Compose
-- Kubernetes port-forwarding
-- devcontainer workflows
-- multiple services per project
-- richer terminal layouts such as splits and tabs
-
----
-
-## Product Structure
-
-A useful domain model is:
-
-- **Projects**: for example `aiact-anthropic`
-- **Profiles**: configuration for a specific remote target and runtime setup
-- **Connections**: managed SSH/tunnel sessions
-- **Terminals**: interactive windows or tabs bound to profiles and contexts
-- **Containers**: runtime instances associated with profiles
-- **Services**: locally exposed URLs
-- **Policies**: reconnection, reuse, recreate, cleanup behavior
-
----
-
-## Technical Architecture Requirements
-
-If implemented in Electron, the app should require:
-
-- process and connection management in the main process
-- renderer limited to UI responsibilities
-- strict IPC boundaries
-- structured state management for profiles, connections, terminals, and containers
-- integrated terminal emulation for interactive shells
-- safe command construction and spawning
-- profile schema validation
-- event-driven updates from process managers to the UI
-
-Recommended internal components:
-
-- Profile Manager
-- Connection Manager
-- SSH Manager
-- Port Forward Manager
-- Container Manager
-- Terminal Manager
-- Health Check Manager
-- Configuration Manager
-- Event Log Manager
-
----
-
-## Example Profile Model
+## Profile Schema
 
 ```json
 {
-  "profiles": [
-    {
-      "name": "aiact-anthropic",
-      "ssh": {
-        "host": "spark-7406.tail845a53.ts.net",
-        "forwards": [
-          {
-            "localPort": 3000,
-            "remoteHost": "localhost",
-            "remotePort": 3000
-          }
-        ]
-      },
-      "terminal": {
-        "presentation": "tab",
-        "defaultContext": "container",
-        "keepVisibleWhenDisconnected": true
-      },
-      "container": {
-        "name": "aiact-anthropic",
-        "image": "quay.io/innoq/claude-dind:latest",
-        "runtime": "sysbox-runc",
-        "ports": [
-          {
-            "hostPort": 3006,
-            "containerPort": 3006
-          }
-        ],
-        "workspaceMount": {
-          "localPath": "${cwd}",
-          "containerPath": "/workspace"
-        },
-        "workdir": "/workspace",
-        "interactive": true
-      },
-      "service": {
-        "urls": [
-          "http://localhost:3000"
-        ],
-        "healthcheckPath": "/"
-      },
-      "connectionPolicy": {
-        "autoReconnect": true,
-        "preventDuplicateConnections": true,
-        "existingContainerBehavior": "attach-or-recreate"
+  "id": "uuid",
+  "name": "myproject",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "ssh": {
+    "host": "myhost.example.com",
+    "user": "dev",
+    "port": 22,
+    "identityFile": "~/.ssh/id_ed25519",
+    "forwards": [
+      {
+        "localPort": 3000,
+        "remoteHost": "localhost",
+        "remotePort": 3000,
+        "containerPort": 8080
       }
-    }
-  ]
+    ],
+    "keepalive": true,
+    "extraOptions": {}
+  },
+  "container": {
+    "name": "myproject",
+    "image": "myregistry.example.com/myimage:latest",
+    "runtime": "sysbox-runc",
+    "shell": "bash",
+    "workspaceMount": {
+      "localPath": "${cwd}",
+      "containerPath": "/workspace"
+    },
+    "workdir": "/workspace",
+    "env": { "MY_VAR": "value" },
+    "extraArgs": ["--cap-add=SYS_ADMIN"],
+    "interactive": true
+  },
+  "terminal": {
+    "presentation": "tab",
+    "defaultContext": "container",
+    "keepVisibleWhenDisconnected": true
+  },
+  "service": {
+    "urls": ["http://localhost:3000"],
+    "healthcheckPath": "/"
+  },
+  "connectionPolicy": {
+    "autoReconnect": true,
+    "preventDuplicateConnections": true,
+    "existingContainerBehavior": "attach-or-recreate",
+    "reconnectDelay": 3000,
+    "maxReconnectAttempts": 5
+  },
+  "workspace": {
+    "localPath": "/home/user/projects/myproject",
+    "recentPaths": ["/home/user/projects/myproject"]
+  }
 }
 ```
 
+### Template variables in workspace mount paths
+- `${cwd}` — resolved to the profile's configured `workspace.localPath`
+- `${projectName}` — resolved to the profile name
+
 ---
 
-## Vision
+## Architecture
 
-The application should make remote development feel operationally simple while preserving the power of terminal-driven workflows:
+### Process boundary
 
-**Select profile → Connect → Get a managed terminal window → Access services → Control the full session lifecycle**
+| Layer | Responsibility |
+|-------|---------------|
+| **Main process** | SSH spawning, PTY management, Docker exec over SSH, health checks, profile persistence, IPC handlers |
+| **Preload** | Type-safe IPC bridge (`window.api`) |
+| **Renderer** | React UI, Zustand state, xterm.js terminal rendering |
+
+### Main process managers
+
+| Manager | Responsibility |
+|---------|---------------|
+| `ProfileManager` | electron-store CRUD, import/export, clone |
+| `ConnectionManager` | SSH tunnel process, state machine, reconnect scheduling |
+| `TerminalManager` | node-pty sessions, context dispatch, IPC data forwarding |
+| `ContainerManager` | docker commands over SSH exec, run command builder, port detection |
+| `HealthCheckManager` | HTTP polling, in-flight deduplication, state change emission |
+| `EventLogManager` | Circular buffer, EventEmitter, log level filtering |
+
+### IPC channels (selection)
+
+| Channel | Direction | Purpose |
+|---------|-----------|---------|
+| `connection:launch` | invoke | SSH + container start/attach + terminal |
+| `connection:connect` / `disconnect` | invoke | SSH tunnel only |
+| `terminal:create` / `destroy` / `input` / `resize` | invoke | PTY lifecycle |
+| `terminal:data` / `terminal:exited` | push | PTY output and exit events |
+| `container:start` / `stop` / `restart` / `remove` / `recreate` | invoke | Container lifecycle |
+| `container:detectPorts` | invoke | Read EXPOSE from remote image |
+| `connection:stateChanged` / `container:stateChanged` | push | State updates to renderer |
+| `service:healthChanged` | push | Health check results |
+| `fs:writeText` | invoke | Write exported profile JSON to file |
+
+---
+
+## Security
+
+- SSH keys are never stored — the app references key file paths only (`identityFile`)
+- No passwords are stored in profiles
+- All remote commands run over SSH using existing system trust (known_hosts, ssh-agent)
+- `StrictHostKeyChecking=accept-new` for non-interactive SSH exec commands
+- IPC follows Electron contextIsolation — the renderer cannot execute arbitrary main-process code outside the defined API
+
+---
+
+## Not Yet Implemented
+
+- Session restore on app restart (terminal tabs are not persisted across restarts)
+- Podman, Docker Compose, Kubernetes port-forward support
+- Split terminal panes
+- Port conflict detection before connection start
+- YAML profile format (JSON only)
+- Windows support (Linux and macOS only)
