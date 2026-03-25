@@ -18,8 +18,7 @@ interface AppStore {
   // ── UI state ────────────────────────────────────────────────────────────────
   activeProfileId: string | null
   activeTerminalId: string | null
-  splitSession: TerminalSession | null
-  splitDirection: 'vertical' | 'horizontal'
+  splits: Record<string, { session: TerminalSession; direction: 'vertical' | 'horizontal' }>
   showProfileEditor: boolean
   editingProfileId: string | null
   showLogViewer: boolean
@@ -47,7 +46,8 @@ interface AppStore {
 
   setActiveProfile: (id: string | null) => void
   setActiveTerminal: (id: string | null) => void
-  setSplitSession: (session: TerminalSession | null, direction?: 'vertical' | 'horizontal') => void
+  setSplitSession: (primaryId: string, session: TerminalSession, direction: 'vertical' | 'horizontal') => void
+  removeSplit: (primaryId: string) => void
   openProfileEditor: (profileId?: string) => void
   closeProfileEditor: () => void
   toggleLogViewer: () => void
@@ -65,8 +65,7 @@ export const useAppStore = create<AppStore>((set) => ({
 
   activeProfileId: null,
   activeTerminalId: null,
-  splitSession: null,
-  splitDirection: 'vertical' as const,
+  splits: {},
   showProfileEditor: false,
   editingProfileId: null,
   showLogViewer: false,
@@ -109,10 +108,15 @@ export const useAppStore = create<AppStore>((set) => ({
     set((s) => ({ terminals: [...s.terminals, session] })),
 
   removeTerminal: (id) =>
-    set((s) => ({
-      terminals: s.terminals.filter((t) => t.id !== id),
-      activeTerminalId: s.activeTerminalId === id ? null : s.activeTerminalId
-    })),
+    set((s) => {
+      const next = { ...s.splits }
+      delete next[id]
+      return {
+        terminals: s.terminals.filter((t) => t.id !== id),
+        activeTerminalId: s.activeTerminalId === id ? null : s.activeTerminalId,
+        splits: next
+      }
+    }),
 
   markTerminalInactive: (id) =>
     set((s) => ({
@@ -141,8 +145,15 @@ export const useAppStore = create<AppStore>((set) => ({
 
   setActiveTerminal: (id) => set({ activeTerminalId: id }),
 
-  setSplitSession: (session, direction = 'vertical') =>
-    set({ splitSession: session, splitDirection: direction }),
+  setSplitSession: (primaryId, session, direction) =>
+    set((s) => ({ splits: { ...s.splits, [primaryId]: { session, direction } } })),
+
+  removeSplit: (primaryId) =>
+    set((s) => {
+      const next = { ...s.splits }
+      delete next[primaryId]
+      return { splits: next }
+    }),
 
   openProfileEditor: (profileId) =>
     set({ showProfileEditor: true, editingProfileId: profileId ?? null }),

@@ -1,4 +1,5 @@
 import React, { useRef } from 'react'
+import { Terminal, Plus, Upload, Download, Sun, Moon } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { ProfileCard } from './ProfileCard'
 import { toast } from './Toast'
@@ -53,13 +54,13 @@ export function Sidebar(): React.ReactElement {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <div className="logo">D</div>
+        <div className="logo"><Terminal size={14} /></div>
         <h1>DevEnv Manager</h1>
       </div>
 
       <div className="sidebar-actions">
         <button className="btn btn-primary btn-sm btn-full" onClick={handleNewProfile}>
-          + New Profile
+          <Plus size={13} /> New Profile
         </button>
       </div>
 
@@ -82,7 +83,7 @@ export function Sidebar(): React.ReactElement {
           onClick={handleImport}
           title="Import profile(s) from JSON file"
         >
-          Import
+          <Upload size={13} /> Import
         </button>
         <button
           className="btn btn-ghost btn-sm"
@@ -90,14 +91,14 @@ export function Sidebar(): React.ReactElement {
           onClick={handleExportAll}
           title="Export all profiles"
         >
-          Export All
+          <Download size={13} /> Export
         </button>
         <button
           className="btn btn-icon"
           onClick={toggleTheme}
           title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
         >
-          {theme === 'dark' ? '☀' : '☾'}
+          {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
         </button>
       </div>
 

@@ -1,8 +1,11 @@
 import React, { useState } from 'react'
+import { Pencil, Copy, Trash2 } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { toast } from './Toast'
 import { showConfirm } from './ConfirmModal'
 import type { Profile } from '../../../shared/types'
+
+const AVATAR_COLORS = ['--blue', '--mauve', '--teal', '--peach', '--green', '--sapphire']
 
 interface Props {
   profile: Profile
@@ -90,12 +93,17 @@ export function ProfileCard({ profile }: Props): React.ReactElement {
     }
   }
 
+  const avatarColor = AVATAR_COLORS[profile.name.charCodeAt(0) % AVATAR_COLORS.length]
+
   return (
     <div
       className={`profile-card ${activeProfileId === profile.id ? 'active' : ''}`}
       onClick={handleSelect}
     >
       <div className="profile-card-header">
+        <span className="profile-avatar" style={{ background: `var(${avatarColor})` }}>
+          {profile.name[0].toUpperCase()}
+        </span>
         <div className="profile-name" title={profile.name}>
           {profile.name}
         </div>
@@ -127,7 +135,7 @@ export function ProfileCard({ profile }: Props): React.ReactElement {
           onClick={() => openProfileEditor(profile.id)}
           title="Edit profile"
         >
-          ✎
+          <Pencil size={12} />
         </button>
 
         <button
@@ -135,7 +143,7 @@ export function ProfileCard({ profile }: Props): React.ReactElement {
           onClick={handleClone}
           title="Clone profile"
         >
-          ⧉
+          <Copy size={12} />
         </button>
 
         <button
@@ -144,7 +152,7 @@ export function ProfileCard({ profile }: Props): React.ReactElement {
           title="Delete profile"
           style={{ marginLeft: 'auto' }}
         >
-          ✕
+          <Trash2 size={12} />
         </button>
       </div>
     </div>

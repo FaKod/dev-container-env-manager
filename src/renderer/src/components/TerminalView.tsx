@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react'
+import { Terminal as TerminalIcon, ChevronUp, ChevronDown, X as XIcon } from 'lucide-react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
@@ -48,6 +49,14 @@ const terminalInstances = new Map<
   string,
   { xterm: Terminal; fitAddon: FitAddon; searchAddon: SearchAddon }
 >()
+
+export function cleanupTerminalInstance(id: string): void {
+  const inst = terminalInstances.get(id)
+  if (inst) {
+    inst.xterm.dispose()
+    terminalInstances.delete(id)
+  }
+}
 
 function createXterm(
   container: HTMLElement,
@@ -225,17 +234,6 @@ function TerminalPane({ session, visible }: TerminalPaneProps): React.ReactEleme
     })
   }, [visible, session.id])
 
-  // Dispose xterm on unmount
-  useEffect(() => {
-    return () => {
-      const inst = terminalInstances.get(session.id)
-      if (inst) {
-        inst.xterm.dispose()
-        terminalInstances.delete(session.id)
-      }
-    }
-  }, [session.id])
-
   // Handle window/pane resize
   useEffect(() => {
     if (!visible) return
@@ -292,9 +290,9 @@ function TerminalPane({ session, visible }: TerminalPaneProps): React.ReactEleme
             }}
             placeholder="Find in terminal…"
           />
-          <button className="btn btn-icon" onClick={findPrev} title="Previous (Shift+Enter)">↑</button>
-          <button className="btn btn-icon" onClick={findNext} title="Next (Enter)">↓</button>
-          <button className="btn btn-icon" onClick={closeFind} title="Close (Esc)">✕</button>
+          <button className="btn btn-icon" onClick={findPrev} title="Previous (Shift+Enter)"><ChevronUp size={13} /></button>
+          <button className="btn btn-icon" onClick={findNext} title="Next (Enter)"><ChevronDown size={13} /></button>
+          <button className="btn btn-icon" onClick={closeFind} title="Close (Esc)"><XIcon size={13} /></button>
         </div>
       )}
     </div>
@@ -315,7 +313,10 @@ function fitAll(ids: string[]): void {
 }
 
 export function TerminalView(): React.ReactElement {
-  const { terminals, activeTerminalId, splitSession, splitDirection, setSplitSession, theme } = useAppStore()
+  const { terminals, activeTerminalId, splits, removeSplit, theme } = useAppStore()
+  const activeSplit = activeTerminalId ? splits[activeTerminalId] : undefined
+  const splitSession = activeSplit?.session ?? null
+  const splitDirection = activeSplit?.direction ?? 'vertical'
   const [splitRatio, setSplitRatio] = useState(0.5)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -355,9 +356,10 @@ export function TerminalView(): React.ReactElement {
   )
 
   async function handleCloseSplit(): Promise<void> {
-    if (!splitSession) return
+    if (!splitSession || !activeTerminalId) return
     await window.api.destroyTerminal(splitSession.id)
-    setSplitSession(null)
+    cleanupTerminalInstance(splitSession.id)
+    removeSplit(activeTerminalId)
   }
 
   const activeSession = terminals.find((t) => t.id === activeTerminalId)
@@ -366,6 +368,7 @@ export function TerminalView(): React.ReactElement {
     return (
       <div className="terminal-container">
         <div className="terminal-empty">
+          <TerminalIcon size={48} className="terminal-empty-icon" />
           <h2>No terminal open</h2>
           <p>Select a profile in the sidebar and click Connect to open a terminal.</p>
         </div>
@@ -385,9 +388,7 @@ export function TerminalView(): React.ReactElement {
           <div className="terminal-split-pane" style={{ flex: `${splitRatio} 0 0` }}>
             <TerminalPane session={activeSession} visible={true} />
             <div className={`context-breadcrumb ctx-${activeSession.context}`}>
-              {activeSession.context === 'local' && 'LOCAL'}
-              {activeSession.context === 'ssh' && `SSH › ${activeSession.title.split(' — ')[1] ?? ''}`}
-              {activeSession.context === 'container' && `CONTAINER › ${activeSession.title.split(' — ')[1] ?? ''}`}
+              {activeSession.context.toUpperCase()}
             </div>
           </div>
           <div
@@ -397,9 +398,7 @@ export function TerminalView(): React.ReactElement {
           <div className="terminal-split-pane" style={{ flex: `${1 - splitRatio} 0 0` }}>
             <TerminalPane session={splitSession} visible={true} />
             <div className={`context-breadcrumb ctx-${splitSession.context}`}>
-              {splitSession.context === 'local' && 'LOCAL'}
-              {splitSession.context === 'ssh' && `SSH › ${splitSession.title.split(' — ')[1] ?? ''}`}
-              {splitSession.context === 'container' && `CONTAINER › ${splitSession.title.split(' — ')[1] ?? ''}`}
+              {splitSession.context.toUpperCase()}
             </div>
             <button className="terminal-split-close" onClick={handleCloseSplit} title="Close split">✕</button>
           </div>
@@ -412,9 +411,7 @@ export function TerminalView(): React.ReactElement {
               <TerminalPane session={session} visible={isVisible} />
               {isVisible && (
                 <div className={`context-breadcrumb ctx-${session.context}`}>
-                  {session.context === 'local' && 'LOCAL'}
-                  {session.context === 'ssh' && `SSH › ${session.title.split(' — ')[1] ?? ''}`}
-                  {session.context === 'container' && `CONTAINER › ${session.title.split(' — ')[1] ?? ''}`}
+                  {session.context.toUpperCase()}
                 </div>
               )}
             </React.Fragment>

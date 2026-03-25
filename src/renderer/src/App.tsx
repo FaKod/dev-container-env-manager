@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react'
+import { ScrollText, ChevronDown, ChevronRight } from 'lucide-react'
 import { useAppStore } from './store/useAppStore'
 import { Sidebar } from './components/Sidebar'
 import { TerminalTabs } from './components/TerminalTabs'
@@ -134,7 +135,9 @@ function PanelToggleBar(): React.ReactElement {
         onClick={toggleLogViewer}
         title="Toggle event log"
       >
-        {showLogViewer ? '▾' : '▸'} Logs
+        <ScrollText size={12} />
+        {showLogViewer ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+        Logs
       </button>
     </div>
   )

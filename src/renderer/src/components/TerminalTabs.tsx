@@ -1,5 +1,7 @@
 import React from 'react'
+import { SplitSquareHorizontal, SplitSquareVertical, Plus, X } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
+import { cleanupTerminalInstance } from './TerminalView'
 import { toast } from './Toast'
 import type { TerminalContext } from '../../../shared/types'
 
@@ -7,7 +9,7 @@ export function TerminalTabs(): React.ReactElement {
   const {
     terminals,
     activeTerminalId,
-    splitSession,
+    splits,
     activeProfileId,
     profiles,
     setActiveTerminal,
@@ -15,15 +17,26 @@ export function TerminalTabs(): React.ReactElement {
     removeTerminal,
     addTerminal,
     markTerminalRead,
-    setSplitSession
+    setSplitSession,
+    removeSplit
   } = useAppStore()
+
+  const activeSplit = activeTerminalId ? splits[activeTerminalId] : undefined
 
   async function handleCloseTab(
     e: React.MouseEvent,
     terminalId: string
   ): Promise<void> {
     e.stopPropagation()
+    // Also destroy the split PTY if this tab owns one
+    if (splits[terminalId]) {
+      const splitId = splits[terminalId].session.id
+      await window.api.destroyTerminal(splitId)
+      cleanupTerminalInstance(splitId)
+      removeSplit(terminalId)
+    }
     await window.api.destroyTerminal(terminalId)
+    cleanupTerminalInstance(terminalId)
     removeTerminal(terminalId)
   }
 
@@ -34,8 +47,7 @@ export function TerminalTabs(): React.ReactElement {
     const ctx: TerminalContext = profile.terminal.defaultContext
     try {
       const session = await window.api.createTerminal(activeProfileId, ctx, 120, 36)
-      // Do NOT add to terminals[] — split sessions are hidden from the tab bar
-      setSplitSession(session, direction)
+      setSplitSession(activeTerminalId, session, direction)
     } catch (err) {
       toast(`Failed to split terminal: ${err}`)
     }
@@ -55,12 +67,7 @@ export function TerminalTabs(): React.ReactElement {
     }
   }
 
-  async function handleTabClick(terminalId: string, profileId: string): Promise<void> {
-    // Destroy the split session's PTY when switching tabs
-    if (splitSession) {
-      await window.api.destroyTerminal(splitSession.id)
-      setSplitSession(null)
-    }
+  function handleTabClick(terminalId: string, profileId: string): void {
     setActiveTerminal(terminalId)
     setActiveProfile(profileId)
     markTerminalRead(terminalId)
@@ -82,30 +89,30 @@ export function TerminalTabs(): React.ReactElement {
           {t.hasUnread && <span className="terminal-tab-unread" />}
           <button
             className="btn btn-icon"
-            style={{ padding: '0 2px', fontSize: 11, marginLeft: 4 }}
+            style={{ marginLeft: 4 }}
             onClick={(e) => handleCloseTab(e, t.id)}
             title="Close terminal"
           >
-            ×
+            <X size={11} />
           </button>
         </div>
       ))}
 
-      {activeTerminalId && !splitSession && (
+      {activeTerminalId && !activeSplit && (
         <>
           <div
             className="terminal-tabs-add"
             onClick={() => handleSplit('vertical')}
             title="Split vertical (new login)"
           >
-            ⊢
+            <SplitSquareHorizontal size={14} />
           </div>
           <div
             className="terminal-tabs-add"
             onClick={() => handleSplit('horizontal')}
             title="Split horizontal (new login)"
           >
-            ⊤
+            <SplitSquareVertical size={14} />
           </div>
         </>
       )}
@@ -116,7 +123,7 @@ export function TerminalTabs(): React.ReactElement {
           onClick={handleAddTab}
           title="Open new terminal for active profile"
         >
-          +
+          <Plus size={14} />
         </div>
       )}
     </div>

@@ -185,15 +185,8 @@ export class TerminalManager extends EventEmitter {
     return opts
   }
 
-  private buildTitle(profile: Profile, context: TerminalContext): string {
-    switch (context) {
-      case 'local':
-        return `local — ${profile.name}`
-      case 'ssh':
-        return `ssh — ${profile.ssh.host}`
-      case 'container':
-        return `container — ${profile.container?.name ?? profile.name}`
-    }
+  private buildTitle(profile: Profile, _context: TerminalContext): string {
+    return profile.name
   }
 
   write(terminalId: string, data: string): void {

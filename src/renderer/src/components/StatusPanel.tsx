@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { Wifi, Network, Box, Circle } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { toast } from './Toast'
 import { showConfirm } from './ConfirmModal'
@@ -99,7 +100,7 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
     <div className="status-panel">
       {/* SSH Connection */}
       <div className="status-section">
-        <div className="status-section-title">SSH Connection</div>
+        <div className="status-section-title"><Wifi size={11} /> SSH Connection</div>
         <div className="status-row">
           <span className="status-label">Host</span>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>
@@ -127,11 +128,11 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
       {/* Port Forwards */}
       {(connState?.portForwards?.length ?? 0) > 0 && (
         <div className="status-section">
-          <div className="status-section-title">Port Forwards</div>
+          <div className="status-section-title"><Network size={11} /> Port Forwards</div>
           {connState!.portForwards.map((pf, i) => (
             <div key={i} className="port-forward-item">
               <span className={pf.active ? 'port-active' : 'port-inactive'}>
-                {pf.active ? '●' : '○'}
+                <Circle size={8} fill={pf.active ? 'currentColor' : 'none'} />
               </span>
               <span>
                 localhost:{pf.forward.localPort}{' '}
@@ -146,7 +147,7 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
       {/* Container */}
       {profile.container && (
         <div className="status-section">
-          <div className="status-section-title">Container</div>
+          <div className="status-section-title"><Box size={11} /> Container</div>
           <div className="status-row">
             <span className="status-label">Name</span>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>
@@ -225,34 +226,17 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
 }
 
 function ConnectionStatusBadge({ status }: { status: string }): React.ReactElement {
-  const color: Record<string, string> = {
-    connected: 'var(--green)',
-    connecting: 'var(--yellow)',
-    reconnecting: 'var(--yellow)',
-    degraded: 'var(--peach)',
-    failed: 'var(--red)',
-    disconnected: 'var(--overlay0)'
+  const cls: Record<string, string> = {
+    connected: 'connected', connecting: 'connecting', reconnecting: 'reconnecting',
+    degraded: 'degraded', failed: 'failed', disconnected: 'disconnected'
   }
-  return (
-    <span style={{ color: color[status] ?? 'var(--overlay0)', fontWeight: 600, fontSize: 12 }}>
-      {status}
-    </span>
-  )
+  return <span className={`status-badge ${cls[status] ?? 'disconnected'}`}><span className="dot" />{status}</span>
 }
 
 function ContainerStatusBadge({ status }: { status: ContainerStatus }): React.ReactElement {
-  const color: Record<string, string> = {
-    running: 'var(--green)',
-    stopped: 'var(--yellow)',
-    starting: 'var(--yellow)',
-    stopping: 'var(--yellow)',
-    failed: 'var(--red)',
-    'not-found': 'var(--overlay0)',
-    unknown: 'var(--overlay0)'
+  const cls: Record<string, string> = {
+    running: 'connected', stopped: 'connecting', starting: 'connecting',
+    stopping: 'connecting', failed: 'failed', 'not-found': 'disconnected', unknown: 'disconnected'
   }
-  return (
-    <span style={{ color: color[status] ?? 'var(--overlay0)', fontWeight: 600, fontSize: 12 }}>
-      {status}
-    </span>
-  )
+  return <span className={`status-badge ${cls[status] ?? 'disconnected'}`}><span className="dot" />{status}</span>
 }
