@@ -66,13 +66,11 @@ function createXterm(
 ): { xterm: Terminal; fitAddon: FitAddon; searchAddon: SearchAddon } {
   const mode = (document.documentElement.dataset.theme as 'dark' | 'light') ?? 'dark'
   const xterm = new Terminal({
-    allowTransparency: true,
     cursorBlink: true,
     fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
     fontSize: terminalFontSize,
     lineHeight: 1.4,
     scrollback: 5000,
-    overviewRulerWidth: 10,
     theme: xtermTheme(mode)
   })
 
