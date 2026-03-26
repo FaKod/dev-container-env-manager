@@ -234,18 +234,22 @@ function TerminalPane({ session, visible }: TerminalPaneProps): React.ReactEleme
     })
   }, [visible, session.id])
 
-  // Handle window/pane resize
+  // Handle window/pane resize — debounced via rAF to avoid rapid-fire IPC
   useEffect(() => {
     if (!visible) return
+    let rafId = 0
     const handleResize = (): void => {
-      const inst = terminalInstances.get(session.id)
-      if (!inst) return
-      inst.fitAddon.fit()
-      window.api.terminalResize(session.id, inst.xterm.cols, inst.xterm.rows)
+      cancelAnimationFrame(rafId)
+      rafId = requestAnimationFrame(() => {
+        const inst = terminalInstances.get(session.id)
+        if (!inst) return
+        inst.fitAddon.fit()
+        window.api.terminalResize(session.id, inst.xterm.cols, inst.xterm.rows)
+      })
     }
     const observer = new ResizeObserver(handleResize)
     if (containerRef.current) observer.observe(containerRef.current)
-    return () => observer.disconnect()
+    return () => { observer.disconnect(); cancelAnimationFrame(rafId) }
   }, [visible, session.id])
 
   function findNext(): void {

@@ -129,15 +129,13 @@ function StatusPanelArea(): React.ReactElement {
 }
 
 function PanelToggleBar(): React.ReactElement {
-  const {
-    showLogViewer, toggleLogViewer,
-    showStatusPanel, toggleStatusPanel,
-    activeProfileId, profiles, connections, containers
-  } = useAppStore()
-
-  const profile = profiles.find((p) => p.id === activeProfileId)
-  const conn = activeProfileId ? connections[activeProfileId] : undefined
-  const container = activeProfileId ? containers[activeProfileId] : undefined
+  const showLogViewer    = useAppStore((s) => s.showLogViewer)
+  const toggleLogViewer  = useAppStore((s) => s.toggleLogViewer)
+  const showStatusPanel  = useAppStore((s) => s.showStatusPanel)
+  const toggleStatusPanel = useAppStore((s) => s.toggleStatusPanel)
+  const profile          = useAppStore((s) => s.profiles.find((p) => p.id === s.activeProfileId))
+  const conn             = useAppStore((s) => s.activeProfileId ? s.connections[s.activeProfileId] : undefined)
+  const container        = useAppStore((s) => s.activeProfileId ? s.containers[s.activeProfileId] : undefined)
   const portCount = conn?.portForwards?.filter((pf) => pf.active).length ?? 0
 
   return (

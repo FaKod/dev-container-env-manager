@@ -28,7 +28,8 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
     }
   }, [connState?.status])
 
-  // Poll container status when connected
+  // Poll container status when connected — only update store if status changed
+  const prevContainerStatus = useRef<string | undefined>(undefined)
   useEffect(() => {
     if (connState?.status !== 'connected') return
     if (!profile?.container) return
@@ -36,14 +37,17 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
     const poll = async (): Promise<void> => {
       try {
         const state = await window.api.getContainerStatus(profileId)
-        setContainerState(profileId, state)
+        if (state.status !== prevContainerStatus.current) {
+          prevContainerStatus.current = state.status
+          setContainerState(profileId, state)
+        }
       } catch {
         // silently ignore
       }
     }
 
     poll()
-    const id = setInterval(poll, 10_000)
+    const id = setInterval(poll, 30_000)
     return () => clearInterval(id)
   }, [connState?.status, profileId])
 
