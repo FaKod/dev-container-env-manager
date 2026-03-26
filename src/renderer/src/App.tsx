@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react'
-import { ScrollText, ChevronDown, ChevronRight } from 'lucide-react'
+import { ScrollText, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react'
 import { useAppStore } from './store/useAppStore'
 import { Sidebar } from './components/Sidebar'
 import { TerminalTabs } from './components/TerminalTabs'
@@ -15,6 +15,7 @@ export default function App(): React.ReactElement {
   const {
     showProfileEditor,
     showLogViewer,
+    showStatusPanel,
     theme,
     profiles,
     setProfiles,
@@ -24,7 +25,7 @@ export default function App(): React.ReactElement {
   } = useAppStore()
 
   const { size: sidebarWidth, handleMouseDown: sidebarMouseDown } = useResizablePane(280, 180, 480, 'horizontal')
-  const { size: bottomHeight, handleMouseDown: bottomMouseDown } = useResizablePane(240, 120, 600, 'vertical')
+  const { size: bottomHeight, handleMouseDown: bottomMouseDown } = useResizablePane(200, 90, 600, 'vertical')
   const { size: logViewerWidth, handleMouseDown: logViewerMouseDown } = useResizablePane(380, 200, 700, 'horizontal', true)
 
   // ── Apply theme on mount and whenever it changes ──────────────────────────────
@@ -87,20 +88,22 @@ export default function App(): React.ReactElement {
       <div className="main-area">
         <TerminalTabs />
         <TerminalView />
-        <div className="resize-handle" onMouseDown={bottomMouseDown} />
+        {showStatusPanel && <div className="resize-handle" onMouseDown={bottomMouseDown} />}
         <PanelToggleBar />
-        {showLogViewer ? (
-          <div className="bottom-panel" style={{ height: bottomHeight, minHeight: bottomHeight }}>
-            <StatusPanelArea />
-            <div className="resize-handle resize-handle-ew" onMouseDown={logViewerMouseDown} />
-            <div style={{ width: logViewerWidth, minWidth: logViewerWidth, overflow: 'hidden', display: 'flex' }}>
-              <LogViewer />
+        {showStatusPanel && (
+          showLogViewer ? (
+            <div className="bottom-panel" style={{ height: bottomHeight, minHeight: bottomHeight }}>
+              <StatusPanelArea />
+              <div className="resize-handle resize-handle-ew" onMouseDown={logViewerMouseDown} />
+              <div style={{ width: logViewerWidth, minWidth: logViewerWidth, overflow: 'hidden', display: 'flex' }}>
+                <LogViewer />
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="bottom-panel" style={{ height: bottomHeight, minHeight: bottomHeight }}>
-            <StatusPanelArea />
-          </div>
+          ) : (
+            <div className="bottom-panel" style={{ height: bottomHeight, minHeight: bottomHeight }}>
+              <StatusPanelArea />
+            </div>
+          )
         )}
       </div>
       {showProfileEditor && <ProfileEditor />}
@@ -126,9 +129,37 @@ function StatusPanelArea(): React.ReactElement {
 }
 
 function PanelToggleBar(): React.ReactElement {
-  const { showLogViewer, toggleLogViewer } = useAppStore()
+  const {
+    showLogViewer, toggleLogViewer,
+    showStatusPanel, toggleStatusPanel,
+    activeProfileId, profiles, connections, containers
+  } = useAppStore()
+
+  const profile = profiles.find((p) => p.id === activeProfileId)
+  const conn = activeProfileId ? connections[activeProfileId] : undefined
+  const container = activeProfileId ? containers[activeProfileId] : undefined
+  const portCount = conn?.portForwards?.filter((pf) => pf.active).length ?? 0
+
   return (
     <div className="panel-toggle-bar">
+      {profile && (
+        <div className="panel-status-strip">
+          <span className="panel-status-profile">{profile.name}</span>
+          <span className={`panel-status-badge pstatus-${conn?.status ?? 'disconnected'}`}>
+            <span className="panel-status-dot" />
+            {conn?.status ?? 'disconnected'}
+          </span>
+          {profile.container && container && (
+            <span className={`panel-status-badge pstatus-container-${container.status ?? 'unknown'}`}>
+              <span className="panel-status-dot" />
+              {container.status ?? 'unknown'}
+            </span>
+          )}
+          {portCount > 0 && (
+            <span className="panel-status-ports">{portCount} port{portCount > 1 ? 's' : ''}</span>
+          )}
+        </div>
+      )}
       <span style={{ flex: 1 }} />
       <button
         className={`panel-toggle-btn ${showLogViewer ? 'active' : ''}`}
@@ -138,6 +169,13 @@ function PanelToggleBar(): React.ReactElement {
         <ScrollText size={12} />
         {showLogViewer ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
         Logs
+      </button>
+      <button
+        className="panel-toggle-btn"
+        onClick={toggleStatusPanel}
+        title={showStatusPanel ? 'Collapse status panel' : 'Expand status panel'}
+      >
+        {showStatusPanel ? <ChevronDown size={11} /> : <ChevronUp size={11} />}
       </button>
     </div>
   )

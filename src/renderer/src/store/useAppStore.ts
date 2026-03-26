@@ -22,6 +22,7 @@ interface AppStore {
   showProfileEditor: boolean
   editingProfileId: string | null
   showLogViewer: boolean
+  showStatusPanel: boolean
   theme: 'dark' | 'light'
 
   // ── Actions ─────────────────────────────────────────────────────────────────
@@ -51,6 +52,7 @@ interface AppStore {
   openProfileEditor: (profileId?: string) => void
   closeProfileEditor: () => void
   toggleLogViewer: () => void
+  toggleStatusPanel: () => void
   toggleTheme: () => void
 }
 
@@ -69,6 +71,7 @@ export const useAppStore = create<AppStore>((set) => ({
   showProfileEditor: false,
   editingProfileId: null,
   showLogViewer: false,
+  showStatusPanel: true,
   theme: (localStorage.getItem('theme') as 'dark' | 'light') ?? 'dark',
 
   setProfiles: (profiles) => set({ profiles }),
@@ -162,6 +165,7 @@ export const useAppStore = create<AppStore>((set) => ({
     set({ showProfileEditor: false, editingProfileId: null }),
 
   toggleLogViewer: () => set((s) => ({ showLogViewer: !s.showLogViewer })),
+  toggleStatusPanel: () => set((s) => ({ showStatusPanel: !s.showStatusPanel })),
 
   toggleTheme: () =>
     set((s) => {

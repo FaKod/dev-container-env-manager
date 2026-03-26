@@ -48,7 +48,7 @@
   --rosewater:#f5e0dc;
 
   --sidebar-width: 280px;
-  --bottom-panel-height: 240px;
+  --bottom-panel-height: 200px;
   --tab-bar-height: 36px;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
   --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
@@ -747,9 +747,9 @@ html, body, #root {
 .status-panel {
   flex: 1;
   overflow-y: auto;
-  padding: 10px 14px;
+  padding: 8px 10px;
   display: flex;
-  gap: 20px;
+  gap: 12px;
   flex-wrap: wrap;
   align-content: flex-start;
 }
@@ -760,7 +760,7 @@ html, body, #root {
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border-radius: 10px;
-  padding: 10px 14px;
+  padding: 7px 10px;
   border: 1px solid var(--glass-border);
   border-left: 3px solid var(--surface1);
   box-shadow: var(--shadow-sm);
@@ -779,7 +779,7 @@ html, body, #root {
   color: var(--overlay0);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  margin-bottom: 8px;
+  margin-bottom: 5px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -794,7 +794,7 @@ html, body, #root {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 0;
+  padding: 2px 0;
   font-size: 12px;
   color: var(--subtext1);
 }
@@ -1018,8 +1018,8 @@ input[type="checkbox"] { accent-color: var(--blue); }
 .container-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 4px;
+  margin-top: 4px;
 }
 
 /* ── Empty state ───────────────────────────────────────────────────────────── */
@@ -1065,6 +1065,68 @@ input[type="checkbox"] { accent-color: var(--blue); }
   background: var(--surface0);
   color: var(--text);
   box-shadow: inset 2px 0 0 var(--blue);
+}
+
+/* ── Panel status strip ─────────────────────────────────────────────────────── */
+.panel-status-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  overflow: hidden;
+}
+
+.panel-status-profile {
+  font-weight: 600;
+  color: var(--subtext1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.panel-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+  text-transform: capitalize;
+}
+
+.panel-status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.pstatus-connected    { color: var(--green);    background: rgba(166,227,161,.15); }
+.pstatus-connecting   { color: var(--yellow);   background: rgba(249,226,175,.15); }
+.pstatus-reconnecting { color: var(--yellow);   background: rgba(249,226,175,.15); }
+.pstatus-degraded     { color: var(--peach);    background: rgba(250,179,135,.15); }
+.pstatus-failed       { color: var(--red);      background: rgba(243,139,168,.15); }
+.pstatus-disconnected { color: var(--overlay1); background: var(--surface0); }
+
+.pstatus-container-running   { color: var(--green);    background: rgba(166,227,161,.15); }
+.pstatus-container-stopped   { color: var(--overlay1); background: var(--surface0); }
+.pstatus-container-starting  { color: var(--yellow);   background: rgba(249,226,175,.15); }
+.pstatus-container-stopping  { color: var(--yellow);   background: rgba(249,226,175,.15); }
+.pstatus-container-failed    { color: var(--red);      background: rgba(243,139,168,.15); }
+.pstatus-container-unknown   { color: var(--overlay0); background: var(--surface0); }
+.pstatus-container-not-found { color: var(--overlay0); background: var(--surface0); }
+
+.panel-status-ports {
+  font-size: 10px;
+  color: var(--sapphire);
+  background: rgba(116,199,236,.15);
+  padding: 1px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
 /* ── Resize handles ────────────────────────────────────────────────────────── */
