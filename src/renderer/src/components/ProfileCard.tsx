@@ -97,11 +97,22 @@ export function ProfileCard({ profile }: Props): React.ReactElement {
 
   return (
     <div
-      className={`profile-card ${activeProfileId === profile.id ? 'active' : ''}`}
+      className={[
+        'profile-card',
+        activeProfileId === profile.id ? 'active' : '',
+        isConnected && activeProfileId !== profile.id ? 'connected-glow' : ''
+      ].filter(Boolean).join(' ')}
       onClick={handleSelect}
     >
       <div className="profile-card-header">
-        <span className="profile-avatar" style={{ background: `var(${avatarColor})` }}>
+        <span
+          className={[
+            'profile-avatar',
+            isConnected  ? 'avatar-connected'  : '',
+            isConnecting ? 'avatar-connecting' : ''
+          ].filter(Boolean).join(' ')}
+          style={{ background: `var(${avatarColor})` }}
+        >
           {profile.name[0].toUpperCase()}
         </span>
         <div className="profile-name" title={profile.name}>

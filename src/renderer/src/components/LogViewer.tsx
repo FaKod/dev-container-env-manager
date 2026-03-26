@@ -96,7 +96,7 @@ export function LogViewer(): React.ReactElement {
 function LogLine({ entry }: { entry: LogEntry }): React.ReactElement {
   const time = entry.timestamp.slice(11, 19) // HH:MM:SS
   return (
-    <div className="log-entry">
+    <div className="log-entry" data-level={entry.level}>
       <span className="log-time">{time}</span>
       <span className={`log-level ${entry.level}`}>{entry.level.toUpperCase()}</span>
       <span className="log-source" title={entry.source}>

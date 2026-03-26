@@ -35,59 +35,16 @@ export function ToastContainer(): React.ReactElement {
   const { toasts, dismiss } = useToastStore()
 
   return (
-    <div style={{
-      position: 'fixed',
-      bottom: 20,
-      right: 20,
-      zIndex: 9999,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 8,
-      pointerEvents: 'none'
-    }}>
+    <div className="toast-container">
       {toasts.map((t) => (
-        <ToastItem key={t.id} entry={t} onDismiss={() => dismiss(t.id)} />
+        <div key={t.id} className={`toast-item toast-${t.type}`}>
+          <div className="toast-body">
+            <span className="toast-message">{t.message}</span>
+            <button className="toast-close" onClick={() => dismiss(t.id)}>✕</button>
+          </div>
+          <div className="toast-progress" />
+        </div>
       ))}
-    </div>
-  )
-}
-
-function ToastItem({ entry, onDismiss }: { entry: ToastEntry; onDismiss: () => void }): React.ReactElement {
-  const bg = entry.type === 'error' ? 'var(--red)' : 'var(--blue)'
-
-  return (
-    <div style={{
-      pointerEvents: 'all',
-      background: bg,
-      color: 'var(--mantle)',
-      padding: '8px 12px',
-      borderRadius: 8,
-      fontSize: 12,
-      fontWeight: 500,
-      maxWidth: 360,
-      display: 'flex',
-      gap: 10,
-      alignItems: 'flex-start',
-      boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
-      animation: 'fadeInUp 0.15s ease'
-    }}>
-      <span style={{ flex: 1, wordBreak: 'break-word' }}>{entry.message}</span>
-      <button
-        onClick={onDismiss}
-        style={{
-          background: 'none',
-          border: 'none',
-          color: 'inherit',
-          cursor: 'pointer',
-          opacity: 0.7,
-          fontSize: 14,
-          padding: 0,
-          lineHeight: 1,
-          flexShrink: 0
-        }}
-      >
-        ✕
-      </button>
     </div>
   )
 }

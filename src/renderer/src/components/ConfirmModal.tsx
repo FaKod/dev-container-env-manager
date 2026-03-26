@@ -56,7 +56,7 @@ export function ConfirmModal(): React.ReactElement | null {
         </div>
         <div className="modal-footer">
           <button className="btn btn-ghost" autoFocus onClick={close}>Cancel</button>
-          <button className="btn btn-danger" onClick={handleConfirm}>Confirm</button>
+          <button className="btn btn-danger btn-danger-pulse" onClick={handleConfirm}>Confirm</button>
         </div>
       </div>
     </div>

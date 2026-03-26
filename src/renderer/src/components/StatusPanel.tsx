@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Wifi, Network, Box, Circle } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { toast } from './Toast'
@@ -18,6 +18,15 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
   const containerState = containers[profileId]
 
   const [containerBusy, setContainerBusy] = useState(false)
+  const [sshIconKey, setSshIconKey] = useState(0)
+  const prevStatus = useRef(connState?.status)
+
+  useEffect(() => {
+    if (connState?.status !== prevStatus.current) {
+      prevStatus.current = connState?.status
+      setSshIconKey((k) => k + 1)
+    }
+  }, [connState?.status])
 
   // Poll container status when connected
   useEffect(() => {
@@ -99,8 +108,11 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
   return (
     <div className="status-panel">
       {/* SSH Connection */}
-      <div className="status-section">
-        <div className="status-section-title"><Wifi size={11} /> SSH Connection</div>
+      <div className="status-section status-section-ssh">
+        <div className="status-section-title">
+          <span key={sshIconKey} className="icon-pulse"><Wifi size={11} /></span>
+          SSH Connection
+        </div>
         <div className="status-row">
           <span className="status-label">Host</span>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>
@@ -127,7 +139,7 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
 
       {/* Port Forwards */}
       {(connState?.portForwards?.length ?? 0) > 0 && (
-        <div className="status-section">
+        <div className="status-section status-section-ports">
           <div className="status-section-title"><Network size={11} /> Port Forwards</div>
           {connState!.portForwards.map((pf, i) => (
             <div key={i} className="port-forward-item">
@@ -146,7 +158,7 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
 
       {/* Container */}
       {profile.container && (
-        <div className="status-section">
+        <div className="status-section status-section-container">
           <div className="status-section-title"><Box size={11} /> Container</div>
           <div className="status-row">
             <span className="status-label">Name</span>
