@@ -522,7 +522,7 @@ html, body, #root {
 .terminal-wrapper.visible { display: block; }
 
 .xterm { height: 100% !important; }
-.xterm-viewport { overflow-y: auto !important; }
+.xterm-viewport { overflow-y: scroll !important; }
 
 /* ── Terminal find bar ─────────────────────────────────────────────────────── */
 .terminal-find-bar {
