@@ -50,7 +50,7 @@ npm run dist       # x64 AppImage (always, cross-compiled via gcc-x86-64-linux-g
 To launch a built AppImage in a container (no display server required for testing):
 
 ```bash
-"dist/DevEnv Manager-1.0.0.AppImage" --no-sandbox
+"dist/FaKods Legendary DevContainer Manager-1.0.0.AppImage" --no-sandbox
 ```
 
 `--no-sandbox` is only needed in containers where `chrome-sandbox` cannot be owned by root. Not needed on a normal desktop install.
