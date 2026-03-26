@@ -19,6 +19,7 @@ export default function App(): React.ReactElement {
     theme,
     profiles,
     setProfiles,
+    setProjects,
     setConnectionState,
     setContainerState,
     addLog
@@ -36,6 +37,7 @@ export default function App(): React.ReactElement {
   // ── Load initial data ────────────────────────────────────────────────────────
   useEffect(() => {
     window.api.getProfiles().then(setProfiles).catch((err) => toast(`Failed to load profiles: ${err}`))
+    window.api.getProjects().then(setProjects).catch((err) => toast(`Failed to load projects: ${err}`))
   }, [])
 
   // ── Subscribe to push events ──────────────────────────────────────────────────

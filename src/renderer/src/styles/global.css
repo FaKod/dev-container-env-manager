@@ -222,6 +222,62 @@ html, body, #root {
   gap: 6px;
 }
 
+/* ── Project Sections ──────────────────────────────────────────────────────── */
+.project-section { margin-bottom: 2px; }
+
+.project-header {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 6px; border-radius: 6px; cursor: pointer;
+  user-select: none; position: relative;
+  background: var(--surface0);
+}
+.project-header:hover { background: var(--surface1); }
+.project-header.drag-over {
+  background: rgba(137,180,250,.12);
+  outline: 1px dashed var(--blue);
+  border-radius: 6px;
+}
+
+.project-chevron { color: var(--overlay0); transition: transform 0.15s; flex-shrink: 0; }
+.project-chevron.open  { transform: rotate(0deg); }
+.project-chevron.closed { transform: rotate(-90deg); }
+
+.project-title {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--subtext1); flex: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.project-title-input {
+  flex: 1; font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.07em; background: var(--surface1);
+  border: 1px solid var(--blue); border-radius: 4px; color: var(--text);
+  padding: 1px 5px; outline: none; font-family: var(--font-ui);
+  min-width: 0;
+}
+
+.project-count {
+  font-size: 10px; color: var(--overlay0); background: var(--surface0);
+  padding: 0 5px; border-radius: 999px; flex-shrink: 0;
+}
+
+.project-actions { display: flex; gap: 1px; opacity: 0; transition: opacity 0.12s; }
+.project-header:hover .project-actions { opacity: 1; }
+
+.project-profiles { display: flex; flex-direction: column; gap: 6px; padding: 3px 2px 4px 14px; }
+.project-profiles.hidden { display: none; }
+
+.project-empty {
+  font-size: 10px; color: var(--overlay0); text-align: center;
+  padding: 8px 4px; border: 1px dashed var(--surface1); border-radius: 6px;
+  pointer-events: none;
+}
+
+.project-section.orphaned .project-title { color: var(--overlay0); font-style: italic; }
+
+/* Profile card drag state */
+.profile-card[draggable] { cursor: grab; }
+.profile-card[draggable]:active { opacity: 0.55; cursor: grabbing; }
+
 /* ── Profile Card ──────────────────────────────────────────────────────────── */
 .profile-card {
   border-radius: 10px;

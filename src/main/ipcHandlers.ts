@@ -51,6 +51,24 @@ export function setupIpcHandlers(opts: SetupOptions): void {
 
   ipcMain.handle('profile:import', (_e, json: string) => profileManager.importProfile(json))
 
+  ipcMain.handle('profile:moveToProject', (_e, profileId: string, projectId: string | undefined) =>
+    profileManager.moveProfileToProject(profileId, projectId)
+  )
+
+  // ─── Projects ──────────────────────────────────────────────────────────────
+
+  ipcMain.handle('project:list', () => profileManager.getProjects())
+
+  ipcMain.handle('project:create', (_e, data: { name: string }) =>
+    profileManager.createProject(data)
+  )
+
+  ipcMain.handle('project:update', (_e, id: string, updates: { name: string }) =>
+    profileManager.updateProject(id, updates)
+  )
+
+  ipcMain.handle('project:delete', (_e, id: string) => profileManager.deleteProject(id))
+
   ipcMain.handle('profile:pickWorkspace', async (_e, profileId: string) => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory'],

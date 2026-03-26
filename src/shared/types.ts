@@ -61,6 +61,15 @@ export interface WorkspaceConfig {
   recentPaths?: string[]
 }
 
+// ─── Project ──────────────────────────────────────────────────────────────────
+
+export interface Project {
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
+}
+
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
 export interface Profile {
@@ -71,6 +80,7 @@ export interface Profile {
   terminal: TerminalConfig
   connectionPolicy: ConnectionPolicy
   workspace?: WorkspaceConfig
+  projectId?: string
   createdAt: string
   updatedAt: string
 }

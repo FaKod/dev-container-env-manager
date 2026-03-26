@@ -1,9 +1,10 @@
 import Store from 'electron-store'
 import { v4 as uuidv4 } from 'uuid'
-import type { Profile } from '../../shared/types'
+import type { Profile, Project } from '../../shared/types'
 
 interface StoreSchema {
   profiles: Profile[]
+  projects: Project[]
 }
 
 const DEFAULT_PROFILE: Omit<Profile, 'id' | 'name' | 'createdAt' | 'updatedAt'> = {
@@ -32,7 +33,7 @@ export class ProfileManager {
   constructor() {
     this.store = new Store<StoreSchema>({
       name: 'profiles',
-      defaults: { profiles: [] }
+      defaults: { profiles: [], projects: [] }
     })
   }
 
@@ -163,5 +164,63 @@ export class ProfileManager {
     }
 
     return profile
+  }
+
+  // ── Projects ────────────────────────────────────────────────────────────────
+
+  getProjects(): Project[] {
+    return this.store.get('projects', [])
+  }
+
+  createProject(data: { name: string }): Project {
+    const now = new Date().toISOString()
+    const project: Project = {
+      id: uuidv4(),
+      name: data.name.trim() || 'New Project',
+      createdAt: now,
+      updatedAt: now
+    }
+    const projects = this.getProjects()
+    projects.push(project)
+    this.store.set('projects', projects)
+    return project
+  }
+
+  updateProject(id: string, updates: { name: string }): Project {
+    const projects = this.getProjects()
+    const idx = projects.findIndex((p) => p.id === id)
+    if (idx === -1) throw new Error(`Project ${id} not found`)
+    projects[idx] = {
+      ...projects[idx],
+      name: updates.name.trim() || projects[idx].name,
+      updatedAt: new Date().toISOString()
+    }
+    this.store.set('projects', projects)
+    return projects[idx]
+  }
+
+  deleteProject(id: string): Profile[] {
+    const projects = this.getProjects().filter((p) => p.id !== id)
+    this.store.set('projects', projects)
+
+    // Orphan profiles that belonged to this project
+    const profiles = this.getAll().map((p) =>
+      p.projectId === id ? { ...p, projectId: undefined, updatedAt: new Date().toISOString() } : p
+    )
+    this.store.set('profiles', profiles)
+    return profiles
+  }
+
+  moveProfileToProject(profileId: string, projectId: string | undefined): Profile {
+    const profiles = this.getAll()
+    const idx = profiles.findIndex((p) => p.id === profileId)
+    if (idx === -1) throw new Error(`Profile ${profileId} not found`)
+    profiles[idx] = {
+      ...profiles[idx],
+      projectId,
+      updatedAt: new Date().toISOString()
+    }
+    this.store.set('profiles', profiles)
+    return profiles[idx]
   }
 }

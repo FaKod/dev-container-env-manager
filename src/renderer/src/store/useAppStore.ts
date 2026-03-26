@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type {
   Profile,
+  Project,
   ConnectionState,
   ContainerState,
   TerminalSession,
@@ -9,6 +10,7 @@ import type {
 
 interface AppStore {
   // ── Data ────────────────────────────────────────────────────────────────────
+  projects: Project[]
   profiles: Profile[]
   connections: Record<string, ConnectionState>
   containers: Record<string, ContainerState>
@@ -26,6 +28,10 @@ interface AppStore {
   theme: 'dark' | 'light'
 
   // ── Actions ─────────────────────────────────────────────────────────────────
+  setProjects: (projects: Project[]) => void
+  upsertProject: (project: Project) => void
+  removeProject: (id: string) => void
+
   setProfiles: (profiles: Profile[]) => void
   upsertProfile: (profile: Profile) => void
   removeProfile: (id: string) => void
@@ -59,6 +65,7 @@ interface AppStore {
 const MAX_LOGS = 500
 
 export const useAppStore = create<AppStore>((set) => ({
+  projects: [],
   profiles: [],
   connections: {},
   containers: {},
@@ -73,6 +80,21 @@ export const useAppStore = create<AppStore>((set) => ({
   showLogViewer: false,
   showStatusPanel: true,
   theme: (localStorage.getItem('theme') as 'dark' | 'light') ?? 'dark',
+
+  setProjects: (projects) => set({ projects }),
+
+  upsertProject: (project) =>
+    set((s) => {
+      const exists = s.projects.some((p) => p.id === project.id)
+      return {
+        projects: exists
+          ? s.projects.map((p) => (p.id === project.id ? project : p))
+          : [...s.projects, project]
+      }
+    }),
+
+  removeProject: (id) =>
+    set((s) => ({ projects: s.projects.filter((p) => p.id !== id) })),
 
   setProfiles: (profiles) => set({ profiles }),
 

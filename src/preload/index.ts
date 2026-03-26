@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   Profile,
+  Project,
   ConnectionState,
   ContainerState,
   TerminalContext,
@@ -36,6 +37,21 @@ const api = {
 
   pickWorkspace: (profileId: string): Promise<Profile | null> =>
     ipcRenderer.invoke('profile:pickWorkspace', profileId),
+
+  moveProfileToProject: (profileId: string, projectId: string | undefined): Promise<Profile> =>
+    ipcRenderer.invoke('profile:moveToProject', profileId, projectId),
+
+  // ── Projects ──────────────────────────────────────────────────────────────
+  getProjects: (): Promise<Project[]> => ipcRenderer.invoke('project:list'),
+
+  createProject: (data: { name: string }): Promise<Project> =>
+    ipcRenderer.invoke('project:create', data),
+
+  updateProject: (id: string, updates: { name: string }): Promise<Project> =>
+    ipcRenderer.invoke('project:update', id, updates),
+
+  deleteProject: (id: string): Promise<Profile[]> =>
+    ipcRenderer.invoke('project:delete', id),
 
   // ── Connections ──────────────────────────────────────────────────────────
   // Full launch: SSH tunnel + container start/attach + ready for terminal

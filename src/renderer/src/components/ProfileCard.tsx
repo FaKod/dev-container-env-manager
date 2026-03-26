@@ -103,6 +103,12 @@ export function ProfileCard({ profile }: Props): React.ReactElement {
         isConnected && activeProfileId !== profile.id ? 'connected-glow' : ''
       ].filter(Boolean).join(' ')}
       onClick={handleSelect}
+      draggable
+      onDragStart={(e) => {
+        e.stopPropagation()
+        e.dataTransfer.setData('text/plain', profile.id)
+        e.dataTransfer.effectAllowed = 'move'
+      }}
     >
       <div className="profile-card-header">
         <span
