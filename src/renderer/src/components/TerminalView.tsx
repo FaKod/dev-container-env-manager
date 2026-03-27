@@ -13,6 +13,9 @@ function xtermTheme(mode: 'dark' | 'light'): object {
     return {
       background: '#eff1f5', foreground: '#4c4f69',
       cursor: '#dc8a78', cursorAccent: '#eff1f5',
+      selectionBackground: 'rgba(30,102,245,0.22)',
+      selectionForeground: '#4c4f69',
+      selectionInactiveBackground: 'rgba(30,102,245,0.12)',
       black: '#5c5f77', red: '#d20f39', green: '#40a02b',
       yellow: '#df8e1d', blue: '#1e66f5', magenta: '#8839ef',
       cyan: '#179299', white: '#acb0be',
