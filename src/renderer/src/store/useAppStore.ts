@@ -47,6 +47,7 @@ interface AppStore {
   markTerminalInactive: (id: string) => void
   markTerminalUnread: (id: string) => void
   markTerminalRead: (id: string) => void
+  setTerminalTitle: (id: string, title: string) => void
 
   addLog: (entry: LogEntry) => void
   setLogs: (logs: LogEntry[]) => void
@@ -156,6 +157,11 @@ export const useAppStore = create<AppStore>((set) => ({
   markTerminalRead: (id) =>
     set((s) => ({
       terminals: s.terminals.map((t) => (t.id === id ? { ...t, hasUnread: false } : t))
+    })),
+
+  setTerminalTitle: (id, title) =>
+    set((s) => ({
+      terminals: s.terminals.map((t) => (t.id === id ? { ...t, title } : t))
     })),
 
   addLog: (entry) =>

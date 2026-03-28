@@ -65,7 +65,8 @@ function createXterm(
   container: HTMLElement,
   terminalId: string,
   onData: (data: string) => void,
-  onOpenFind: () => void
+  onOpenFind: () => void,
+  onTitleChange: (title: string) => void
 ): { xterm: Terminal; fitAddon: FitAddon; searchAddon: SearchAddon } {
   const mode = (document.documentElement.dataset.theme as 'dark' | 'light') ?? 'dark'
   const xterm = new Terminal({
@@ -87,6 +88,10 @@ function createXterm(
 
   xterm.open(container)
   fitAddon.fit()
+
+  // OSC 0 = set icon name + title; OSC 2 = set title only — both used by common shells/PS1
+  xterm.parser.registerOscHandler(0, (data) => { onTitleChange(data); return true })
+  xterm.parser.registerOscHandler(2, (data) => { onTitleChange(data); return true })
 
   xterm.onData(onData)
 
@@ -164,7 +169,7 @@ interface TerminalPaneProps {
 }
 
 function TerminalPane({ session, visible }: TerminalPaneProps): React.ReactElement {
-  const { markTerminalInactive, markTerminalUnread, markTerminalRead } = useAppStore()
+  const { markTerminalInactive, markTerminalUnread, markTerminalRead, setTerminalTitle } = useAppStore()
   const containerRef = useRef<HTMLDivElement>(null)
   const initializedRef = useRef(false)
   const visibleRef = useRef(visible)
@@ -190,7 +195,7 @@ function TerminalPane({ session, visible }: TerminalPaneProps): React.ReactEleme
   useEffect(() => {
     if (!containerRef.current || initializedRef.current) return
     if (!terminalInstances.has(session.id)) {
-      createXterm(containerRef.current, session.id, handleData, () => setFindOpen(true))
+      createXterm(containerRef.current, session.id, handleData, () => setFindOpen(true), (title) => setTerminalTitle(session.id, title))
     } else {
       const inst = terminalInstances.get(session.id)!
       containerRef.current.appendChild(inst.xterm.element!)

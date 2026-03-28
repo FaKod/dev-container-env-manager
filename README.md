@@ -34,6 +34,7 @@ No more juggling terminal windows. No more forgetting which container is running
 - Multiple **tabbed terminals** per session, all independently closeable
 - Find bar (`Ctrl+Shift+F`), font resize (`Ctrl+=/−`), copy/paste (`Ctrl+Shift+C/V`), right-click paste
 - Scrollback of 5000 lines, web link detection
+- **Dynamic tab + window titles** — tab title and Electron window title update automatically when the shell emits an OSC title sequence
 
 ### Live Status Panel
 - **At-a-glance status strip** always visible — profile name, SSH badge (connected/connecting/failed), container status, active port count
@@ -112,6 +113,36 @@ Theme: **Catppuccin** Mocha / Latte
 | `Ctrl+0` | Reset font size |
 | `Ctrl+L` | Clear scrollback |
 | Right-click | Paste from clipboard |
+
+---
+
+## Dynamic Terminal Titles
+
+Tab titles and the Electron window title update automatically when the shell emits an OSC title escape sequence. To enable this, add the appropriate snippet to your shell config on the remote host:
+
+**Bash** (`~/.bashrc`):
+```bash
+PROMPT_COMMAND='echo -ne "\033]0;${USER}@${HOSTNAME}:${PWD/#$HOME/~}\007"'
+```
+
+**Zsh** (`~/.zshrc`):
+```zsh
+precmd() { print -Pn "\e]0;%n@%m:%~\a" }
+```
+
+**Fish** (`~/.config/fish/config.fish`):
+```fish
+function fish_title
+    echo (whoami)@(hostname):(prompt_pwd)
+end
+```
+
+You can also set the title manually from any shell at any time:
+```bash
+echo -ne "\033]0;my custom title\007"
+```
+
+The window title format is `{tab title} — DevEnv Manager`, falling back to just `DevEnv Manager` when no terminal is open.
 
 ---
 

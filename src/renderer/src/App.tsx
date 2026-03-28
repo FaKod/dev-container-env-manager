@@ -34,6 +34,16 @@ export default function App(): React.ReactElement {
     document.documentElement.dataset.theme = theme
   }, [theme])
 
+  // ── Keep window title in sync with the active terminal tab ────────────────────
+  const activeTerminalTitle = useAppStore((s) =>
+    s.terminals.find((t) => t.id === s.activeTerminalId)?.title
+  )
+  useEffect(() => {
+    document.title = activeTerminalTitle
+      ? `${activeTerminalTitle} — DevEnv Manager`
+      : 'DevEnv Manager'
+  }, [activeTerminalTitle])
+
   // ── Load initial data ────────────────────────────────────────────────────────
   useEffect(() => {
     window.api.getProfiles().then(setProfiles).catch((err) => toast(`Failed to load profiles: ${err}`))
