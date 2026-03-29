@@ -39,13 +39,17 @@ function xtermTheme(mode: 'dark' | 'light'): object {
 // ── Module-level font size shared across all terminals ─────────────────────────
 let terminalFontSize = 13
 
-function applyFontSize(size: number): void {
+export function applyFontSize(size: number): void {
   terminalFontSize = Math.max(8, Math.min(28, size))
   for (const inst of terminalInstances.values()) {
     inst.xterm.options.fontSize = terminalFontSize
     requestAnimationFrame(() => inst.fitAddon.fit())
   }
 }
+
+export const increaseFontSize = (): void => applyFontSize(terminalFontSize + 1)
+export const decreaseFontSize = (): void => applyFontSize(terminalFontSize - 1)
+export const resetFontSize    = (): void => applyFontSize(13)
 
 // ── Keep xterm instances alive across renders, keyed by terminal ID ────────────
 const terminalInstances = new Map<
@@ -120,8 +124,8 @@ function createXterm(
       navigator.clipboard.readText().then((text) => onData(text)).catch(() => {})
       return false
     }
-    // Font size: Ctrl+= / Ctrl++ to increase
-    if (e.ctrlKey && !e.shiftKey && (e.key === '=' || e.key === '+')) {
+    // Font size: Ctrl+= / Ctrl++ to increase ('+' requires Shift on most keyboards)
+    if (e.ctrlKey && (e.key === '=' || e.key === '+')) {
       applyFontSize(terminalFontSize + 1)
       return false
     }

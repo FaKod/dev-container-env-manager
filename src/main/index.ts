@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, shell, Menu } from 'electron'
 import { join } from 'path'
 import { ProfileManager } from './managers/ProfileManager'
 import { ConnectionManager } from './managers/ConnectionManager'
@@ -65,6 +65,10 @@ function createWindow(): void {
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
+  // Remove the default Electron menu so its built-in zoom accelerators
+  // (Ctrl+= / Ctrl+-) don't conflict with the terminal font-size shortcuts.
+  Menu.setApplicationMenu(null)
+
   createWindow()
 
   app.on('activate', () => {

@@ -3,7 +3,7 @@ import { ScrollText, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react'
 import { useAppStore } from './store/useAppStore'
 import { Sidebar } from './components/Sidebar'
 import { TerminalTabs } from './components/TerminalTabs'
-import { TerminalView } from './components/TerminalView'
+import { TerminalView, increaseFontSize, decreaseFontSize, resetFontSize } from './components/TerminalView'
 import { StatusPanel } from './components/StatusPanel'
 import { LogViewer } from './components/LogViewer'
 import { ProfileEditor } from './components/ProfileEditor'
@@ -96,6 +96,22 @@ export default function App(): React.ReactElement {
         .catch((err) => toast(`Auto-connect failed for "${profile.name}": ${err}`))
     }
   }, [profiles.length])
+
+  // ── Global font-size shortcuts (Ctrl+= / Ctrl+- / Ctrl+0) ────────────────────
+  // Handled here so they work even when the terminal doesn't have keyboard focus.
+  // The Electron default menu is removed (main/index.ts) so these keys are
+  // never intercepted by the native zoom accelerators.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent): void => {
+      if (!e.ctrlKey || e.altKey || e.metaKey) return
+      // '+' requires Shift on most keyboards (Shift+=), so allow shiftKey for it
+      if (e.key === '+' || e.key === '=') { e.preventDefault(); increaseFontSize() }
+      else if (!e.shiftKey && e.key === '-') { e.preventDefault(); decreaseFontSize() }
+      else if (!e.shiftKey && e.key === '0') { e.preventDefault(); resetFontSize() }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [])
 
   // ── Release xterm keyboard focus when focus moves to any non-terminal element ──
   useEffect(() => {
