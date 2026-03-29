@@ -323,8 +323,146 @@ function fitAll(ids: string[]): void {
   }
 }
 
+// ── Tile grid view ─────────────────────────────────────────────────────────────
+
+function TileGrid(): React.ReactElement {
+  const terminals = useAppStore((s) => s.terminals)
+  const containerRef = useRef<HTMLDivElement>(null)
+  // Array of column container DOM refs (populated via ref callbacks)
+  const colRefs = useRef<(HTMLDivElement | null)[]>([])
+
+  const numCols = terminals.length <= 1 ? 1 : terminals.length <= 4 ? 2 : 3
+
+  // Assign terminals to columns: t0→col0, t1→col1, t2→col0, …
+  const columns: TerminalSession[][] = Array.from({ length: numCols }, () => [])
+  terminals.forEach((t, i) => columns[i % numCols].push(t))
+
+  const [colRatios, setColRatios] = useState<number[]>(() => Array(numCols).fill(1))
+  const [rowRatios, setRowRatios] = useState<number[][]>(() =>
+    columns.map((col) => Array(col.length).fill(1))
+  )
+
+  // Reset ratios when terminal count or column count changes
+  useEffect(() => {
+    setColRatios(Array(numCols).fill(1))
+    setRowRatios(Array.from({ length: numCols }, (_, i) => {
+      const len = Math.ceil(terminals.length / numCols) - (i >= terminals.length % numCols && terminals.length % numCols !== 0 ? 1 : 0)
+      return Array(Math.max(1, len)).fill(1)
+    }))
+    colRefs.current = Array(numCols).fill(null)
+  }, [terminals.length, numCols])
+
+  // Re-fit all on entry and when count changes
+  useEffect(() => {
+    const id = setTimeout(() => fitAll(terminals.map((t) => t.id)), 50)
+    return () => clearTimeout(id)
+  }, [terminals.length])
+
+  function handleColDivider(e: React.MouseEvent, divIdx: number): void {
+    e.preventDefault()
+    const container = containerRef.current
+    if (!container) return
+    const rect = container.getBoundingClientRect()
+    // Snapshot ratios at drag start to avoid stale closure issues
+    const captured = [...colRatios]
+    const totalFr  = captured.reduce((a, b) => a + b, 0)
+    const leftFr   = captured.slice(0, divIdx).reduce((a, b) => a + b, 0)
+    const pairFr   = captured[divIdx] + captured[divIdx + 1]
+
+    const onMouseMove = (ev: MouseEvent): void => {
+      const leftPx  = (leftFr / totalFr) * rect.width
+      const pairPx  = (pairFr / totalFr) * rect.width
+      const ratio   = Math.min(0.85, Math.max(0.15, (ev.clientX - rect.left - leftPx) / pairPx))
+      const next    = [...captured]
+      next[divIdx]      = pairFr * ratio
+      next[divIdx + 1]  = pairFr * (1 - ratio)
+      setColRatios(next)
+      fitAll(terminals.map((t) => t.id))
+    }
+    const onMouseUp = (): void => window.removeEventListener('mousemove', onMouseMove)
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp, { once: true })
+  }
+
+  function handleRowDivider(e: React.MouseEvent, colIdx: number, divIdx: number): void {
+    e.preventDefault()
+    const colEl = colRefs.current[colIdx]
+    if (!colEl) return
+    const rect      = colEl.getBoundingClientRect()
+    const captured  = [...(rowRatios[colIdx] ?? [])]
+    const totalFr   = captured.reduce((a, b) => a + b, 0)
+    const topFr     = captured.slice(0, divIdx).reduce((a, b) => a + b, 0)
+    const pairFr    = captured[divIdx] + captured[divIdx + 1]
+
+    const onMouseMove = (ev: MouseEvent): void => {
+      const topPx  = (topFr / totalFr) * rect.height
+      const pairPx = (pairFr / totalFr) * rect.height
+      const ratio  = Math.min(0.85, Math.max(0.15, (ev.clientY - rect.top - topPx) / pairPx))
+      const nextCol = [...captured]
+      nextCol[divIdx]     = pairFr * ratio
+      nextCol[divIdx + 1] = pairFr * (1 - ratio)
+      const next = [...rowRatios]
+      next[colIdx] = nextCol
+      setRowRatios(next)
+      fitAll(terminals.map((t) => t.id))
+    }
+    const onMouseUp = (): void => window.removeEventListener('mousemove', onMouseMove)
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp, { once: true })
+  }
+
+  const totalColFr = colRatios.reduce((a, b) => a + b, 0)
+
+  return (
+    <div ref={containerRef} className="terminal-tile-grid-flex">
+      {columns.map((colTerminals, colIdx) => {
+        const rows    = rowRatios[colIdx] ?? colTerminals.map(() => 1)
+        const totalRowFr = rows.reduce((a, b) => a + b, 0)
+        return (
+          <React.Fragment key={colIdx}>
+            <div
+              ref={(el) => { colRefs.current[colIdx] = el }}
+              className="terminal-tile-col"
+              style={{ flex: `${(colRatios[colIdx] ?? 1) / totalColFr} 0 0` }}
+            >
+              {colTerminals.map((session, rowIdx) => (
+                <React.Fragment key={session.id}>
+                  <div
+                    className="terminal-tile"
+                    style={{ flex: `${(rows[rowIdx] ?? 1) / totalRowFr} 0 0` }}
+                  >
+                    <div className="terminal-tile-header">
+                      <span className={`terminal-tile-ctx tab-ctx-${session.context}`}>{session.context}</span>
+                      <span className="terminal-tile-title">{session.title}</span>
+                    </div>
+                    <div className="terminal-tile-body">
+                      <TerminalPane session={session} visible={true} />
+                    </div>
+                  </div>
+                  {rowIdx < colTerminals.length - 1 && (
+                    <div
+                      className="terminal-split-divider terminal-split-divider-h"
+                      onMouseDown={(e) => handleRowDivider(e, colIdx, rowIdx)}
+                    />
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+            {colIdx < columns.length - 1 && (
+              <div
+                className="terminal-split-divider"
+                onMouseDown={(e) => handleColDivider(e, colIdx)}
+              />
+            )}
+          </React.Fragment>
+        )
+      })}
+    </div>
+  )
+}
+
 export function TerminalView(): React.ReactElement {
-  const { terminals, activeTerminalId, splits, removeSplit, theme } = useAppStore()
+  const { terminals, activeTerminalId, splits, removeSplit, theme, tileMode } = useAppStore()
   const activeSplit = activeTerminalId ? splits[activeTerminalId] : undefined
   const splitSession = activeSplit?.session ?? null
   const splitDirection = activeSplit?.direction ?? 'vertical'
@@ -338,6 +476,14 @@ export function TerminalView(): React.ReactElement {
       inst.xterm.options.theme = t
     }
   }, [theme])
+
+  // Re-fit all terminals when exiting tile mode (returning to tab view)
+  useEffect(() => {
+    if (!tileMode && activeTerminalId) {
+      const ids = splitSession ? [activeTerminalId, splitSession.id] : [activeTerminalId]
+      setTimeout(() => fitAll(ids), 50)
+    }
+  }, [tileMode])
 
   const handleDividerMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -383,6 +529,14 @@ export function TerminalView(): React.ReactElement {
           <h2>No terminal open</h2>
           <p>Select a profile in the sidebar and click Connect to open a terminal.</p>
         </div>
+      </div>
+    )
+  }
+
+  if (tileMode) {
+    return (
+      <div className="terminal-container" style={{ overflow: 'hidden' }}>
+        <TileGrid />
       </div>
     )
   }

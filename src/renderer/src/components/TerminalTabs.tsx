@@ -1,5 +1,5 @@
 import React from 'react'
-import { SplitSquareHorizontal, SplitSquareVertical, Plus, X } from 'lucide-react'
+import { SplitSquareHorizontal, SplitSquareVertical, Plus, X, LayoutGrid, Rows3 } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { cleanupTerminalInstance } from './TerminalView'
 import { toast } from './Toast'
@@ -14,6 +14,8 @@ export function TerminalTabs(): React.ReactElement {
     profiles,
     connections,
     containers,
+    tileMode,
+    toggleTileMode,
     setActiveTerminal,
     setActiveProfile,
     removeTerminal,
@@ -92,7 +94,7 @@ export function TerminalTabs(): React.ReactElement {
 
   return (
     <div className="terminal-tabs">
-      {terminals.map((t) => (
+      {!tileMode && terminals.map((t) => (
         <div
           key={t.id}
           className={`terminal-tab${activeTerminalId === t.id ? ' active' : ''}${!t.active ? ' inactive' : ''}`}
@@ -115,7 +117,7 @@ export function TerminalTabs(): React.ReactElement {
         </div>
       ))}
 
-      {activeTerminalId && !activeSplit && (
+      {!tileMode && activeTerminalId && !activeSplit && (
         <>
           <div
             className="terminal-tabs-add"
@@ -134,13 +136,24 @@ export function TerminalTabs(): React.ReactElement {
         </>
       )}
 
-      {activeProfileId && (
+      {!tileMode && activeProfileId && (
         <div
           className="terminal-tabs-add"
           onClick={handleAddTab}
           title="Open new terminal for active profile"
         >
           <Plus size={14} />
+        </div>
+      )}
+
+      {terminals.length > 0 && (
+        <div
+          className={`terminal-tabs-add${tileMode ? ' active' : ''}`}
+          onClick={toggleTileMode}
+          title={tileMode ? 'Switch to tab view' : 'Switch to tile view'}
+          style={{ marginLeft: 'auto' }}
+        >
+          {tileMode ? <Rows3 size={14} /> : <LayoutGrid size={14} />}
         </div>
       )}
     </div>
