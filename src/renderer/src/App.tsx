@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { ScrollText, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react'
 import { useAppStore } from './store/useAppStore'
 import { Sidebar } from './components/Sidebar'
@@ -22,7 +22,10 @@ export default function App(): React.ReactElement {
     setProjects,
     setConnectionState,
     setContainerState,
-    addLog
+    addLog,
+    addTerminal,
+    setActiveTerminal,
+    setActiveProfile
   } = useAppStore()
 
   const { size: sidebarWidth, handleMouseDown: sidebarMouseDown } = useResizablePane(280, 180, 480, 'horizontal')
@@ -72,6 +75,26 @@ export default function App(): React.ReactElement {
     window.api.getAllConnectionStates().then((states) => {
       states.forEach((s) => setConnectionState(s.profileId, s))
     })
+  }, [profiles.length])
+
+  // ── Auto-connect profiles flagged with autoConnectOnStart ─────────────────────
+  const hasAutoConnected = useRef(false)
+  useEffect(() => {
+    if (profiles.length === 0 || hasAutoConnected.current) return
+    hasAutoConnected.current = true
+
+    const toConnect = profiles.filter((p) => p.connectionPolicy.autoConnectOnStart)
+    for (const profile of toConnect) {
+      window.api.launch(profile.id)
+        .then(async () => {
+          const ctx = profile.container ? 'container' : 'ssh'
+          const session = await window.api.createTerminal(profile.id, ctx, 120, 36)
+          addTerminal(session)
+          setActiveTerminal(session.id)
+          setActiveProfile(profile.id)
+        })
+        .catch((err) => toast(`Auto-connect failed for "${profile.name}": ${err}`))
+    }
   }, [profiles.length])
 
   // ── Release xterm keyboard focus when focus moves to any non-terminal element ──

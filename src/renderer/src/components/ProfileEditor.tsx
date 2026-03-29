@@ -584,6 +584,16 @@ function PolicyTab({ draft, onChange }: TabProps): React.ReactElement {
         <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <input
             type="checkbox"
+            checked={p.autoConnectOnStart ?? false}
+            onChange={(e) => updatePolicy('autoConnectOnStart', e.target.checked)}
+          />
+          Auto-connect on app startup
+        </label>
+      </div>
+      <div className="form-group">
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <input
+            type="checkbox"
             checked={p.preventDuplicateConnections ?? true}
             onChange={(e) => updatePolicy('preventDuplicateConnections', e.target.checked)}
           />

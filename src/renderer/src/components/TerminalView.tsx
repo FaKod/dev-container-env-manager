@@ -170,6 +170,7 @@ interface TerminalPaneProps {
 
 function TerminalPane({ session, visible }: TerminalPaneProps): React.ReactElement {
   const { markTerminalInactive, markTerminalUnread, markTerminalRead, setTerminalTitle } = useAppStore()
+  const profileName = useAppStore((s) => s.profiles.find((p) => p.id === session.profileId)?.name ?? '')
   const containerRef = useRef<HTMLDivElement>(null)
   const initializedRef = useRef(false)
   const visibleRef = useRef(visible)
@@ -195,7 +196,7 @@ function TerminalPane({ session, visible }: TerminalPaneProps): React.ReactEleme
   useEffect(() => {
     if (!containerRef.current || initializedRef.current) return
     if (!terminalInstances.has(session.id)) {
-      createXterm(containerRef.current, session.id, handleData, () => setFindOpen(true), (title) => setTerminalTitle(session.id, title))
+      createXterm(containerRef.current, session.id, handleData, () => setFindOpen(true), (title) => setTerminalTitle(session.id, profileName ? `${profileName}: ${title}` : title))
     } else {
       const inst = terminalInstances.get(session.id)!
       containerRef.current.appendChild(inst.xterm.element!)

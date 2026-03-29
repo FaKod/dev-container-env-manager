@@ -18,6 +18,7 @@ No more juggling terminal windows. No more forgetting which container is running
 
 ### Profile Management
 - Define named **connection profiles** — each with SSH credentials, container config, port forwards, and connection policies
+- Organize profiles into collapsible **Projects** — drag-and-drop profiles between folders, rename or delete projects; orphaned profiles are collected automatically
 - Color-coded **avatar tiles** per profile for instant visual recognition
 - Import/export profiles as JSON — share your setup with teammates in seconds
 - One-click **Clone** to duplicate a profile and tweak it
@@ -27,6 +28,8 @@ No more juggling terminal windows. No more forgetting which container is running
 - **Docker container control** directly from the UI — Start, Stop, Restart, Recreate, Delete
 - Auto-detects the container's default shell from its image `CMD`
 - **Port forward monitoring** with live active/inactive status per tunnel
+- **Auto-connect on startup** — flag any profile to automatically reconnect and open a terminal when the app launches
+- **Container behavior policy** — choose per-profile what happens to an existing container on launch: attach-or-recreate (default), attach only, start if stopped, or always recreate
 
 ### Terminal
 - Full **xterm.js** terminal with Catppuccin-themed colors (dark and light)
@@ -113,6 +116,32 @@ Theme: **Catppuccin** Mocha / Latte
 | `Ctrl+0` | Reset font size |
 | `Ctrl+L` | Clear scrollback |
 | Right-click | Paste from clipboard |
+
+---
+
+## Auto-Connect on Startup
+
+Profiles can reconnect automatically when the app launches — useful for resuming a running container session without any manual steps.
+
+1. Open the **Profile Editor** → **Policy** tab
+2. Check **Auto-connect on app startup**
+3. Save and restart the app
+
+On the next launch the app will:
+- Open the SSH tunnel
+- Apply the profile's **Container Behavior** policy (see below)
+- Open a terminal session directly into the container (or SSH host if no container is configured)
+
+### Container Behavior Policy
+
+Controls what happens to an existing container when a profile is launched. Configurable per-profile under **Profile Editor → Policy → Existing container behavior**:
+
+| Option | Behavior |
+|---|---|
+| `attach-or-recreate` | Attach if running; create/start if not. **(default)** |
+| `attach` | Attach only. Fails if the container is not already running. |
+| `start` | Start if stopped. Fails if the container doesn't exist. |
+| `recreate` | Always remove and recreate the container from scratch. |
 
 ---
 

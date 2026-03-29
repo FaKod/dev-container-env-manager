@@ -100,22 +100,45 @@ export function setupIpcHandlers(opts: SetupOptions): void {
     // 1. Start SSH tunnel (port forwards)
     await connectionManager.connect(profile, mainWindow)
 
-    // 2. Handle container lifecycle: attach if running, start if stopped, create if not-found
+    // 2. Handle container lifecycle per existingContainerBehavior policy
     if (profile.container) {
       const current = await containerManager.getStatus(profile)
       const name = profile.container.name
+      const behavior = profile.connectionPolicy.existingContainerBehavior ?? 'attach-or-recreate'
 
-      eventLogManager.info('Launch', `Container "${name}" status: ${current.status}`, profileId)
+      eventLogManager.info('Launch', `Container "${name}" status: ${current.status}, behavior: ${behavior}`, profileId)
 
-      if (current.status === 'running') {
+      if (behavior === 'recreate') {
+        if (current.status !== 'not-found') {
+          eventLogManager.info('Launch', `Removing container "${name}" for recreate`, profileId)
+          await containerManager.remove(profile)
+        }
+        await containerManager.start(profile)
+
+      } else if (behavior === 'attach') {
+        if (current.status !== 'running') {
+          throw new Error(`Container "${name}" is not running (status: ${current.status})`)
+        }
         eventLogManager.info('Launch', `Attaching to running container "${name}"`, profileId)
-      } else if (current.status === 'stopped') {
-        eventLogManager.info('Launch', `Starting stopped container "${name}"`, profileId)
-        await containerManager.start(profile)
+
+      } else if (behavior === 'start') {
+        if (current.status === 'running') {
+          eventLogManager.info('Launch', `Attaching to running container "${name}"`, profileId)
+        } else if (current.status === 'stopped') {
+          eventLogManager.info('Launch', `Starting stopped container "${name}"`, profileId)
+          await containerManager.start(profile)
+        } else {
+          throw new Error(`Container "${name}" does not exist (status: ${current.status})`)
+        }
+
       } else {
-        // not-found or unknown — create fresh
-        eventLogManager.info('Launch', `Creating container "${name}"`, profileId)
-        await containerManager.start(profile)
+        // 'attach-or-recreate' (default) or 'ask' (falls back to attach-or-recreate)
+        if (current.status === 'running') {
+          eventLogManager.info('Launch', `Attaching to running container "${name}"`, profileId)
+        } else {
+          eventLogManager.info('Launch', `Starting/creating container "${name}"`, profileId)
+          await containerManager.start(profile)
+        }
       }
 
       const finalStatus = await containerManager.getStatus(profile)

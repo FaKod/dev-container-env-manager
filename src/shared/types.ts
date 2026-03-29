@@ -50,6 +50,7 @@ export interface TerminalConfig {
 
 export interface ConnectionPolicy {
   autoReconnect?: boolean
+  autoConnectOnStart?: boolean
   preventDuplicateConnections?: boolean
   existingContainerBehavior?: 'attach' | 'start' | 'recreate' | 'ask' | 'attach-or-recreate'
   reconnectDelay?: number

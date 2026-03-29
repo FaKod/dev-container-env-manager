@@ -200,14 +200,16 @@ export class TerminalManager extends EventEmitter {
   destroy(terminalId: string): void {
     const entry = this.terminals.get(terminalId)
     if (!entry) return
-
-    try {
-      entry.pty.kill()
-    } catch {
-      // already dead
-    }
     this.terminals.delete(terminalId)
     this.logger.info('TerminalManager', `Destroyed terminal ${terminalId}`)
+
+    // Send 'exit' so the remote shell (and docker exec) exits cleanly
+    try { entry.pty.write('exit\n') } catch { /* already dead */ }
+
+    // Force-kill after 300 ms in case exit didn't propagate in time
+    setTimeout(() => {
+      try { entry.pty.kill() } catch { /* already dead */ }
+    }, 300)
   }
 
   destroyForProfile(profileId: string): void {

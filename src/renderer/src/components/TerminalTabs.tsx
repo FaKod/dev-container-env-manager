@@ -12,6 +12,8 @@ export function TerminalTabs(): React.ReactElement {
     splits,
     activeProfileId,
     profiles,
+    connections,
+    containers,
     setActiveTerminal,
     setActiveProfile,
     removeTerminal,
@@ -22,6 +24,19 @@ export function TerminalTabs(): React.ReactElement {
   } = useAppStore()
 
   const activeSplit = activeTerminalId ? splits[activeTerminalId] : undefined
+
+  function checkReady(ctx: TerminalContext, profileId: string): boolean {
+    if (ctx === 'local') return true
+    if (connections[profileId]?.status !== 'connected') {
+      toast('Profile is not connected.')
+      return false
+    }
+    if (ctx === 'container' && containers[profileId]?.status !== 'running') {
+      toast('Container is not running.')
+      return false
+    }
+    return true
+  }
 
   async function handleCloseTab(
     e: React.MouseEvent,
@@ -45,6 +60,7 @@ export function TerminalTabs(): React.ReactElement {
     const profile = profiles.find((p) => p.id === activeProfileId)
     if (!profile) return
     const ctx: TerminalContext = profile.terminal.defaultContext
+    if (!checkReady(ctx, activeProfileId)) return
     try {
       const session = await window.api.createTerminal(activeProfileId, ctx, 120, 36)
       setSplitSession(activeTerminalId, session, direction)
@@ -58,6 +74,7 @@ export function TerminalTabs(): React.ReactElement {
     const profile = profiles.find((p) => p.id === activeProfileId)
     if (!profile) return
     const ctx: TerminalContext = profile.terminal.defaultContext
+    if (!checkReady(ctx, activeProfileId)) return
     try {
       const session = await window.api.createTerminal(activeProfileId, ctx, 120, 36)
       addTerminal(session)
