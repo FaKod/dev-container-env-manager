@@ -474,12 +474,45 @@ function ContainerTab({ draft, onChange }: TabProps): React.ReactElement {
       <div className="form-section-title">Container</div>
       <div className="form-row">
         <div className="form-group">
+          <label>Terminal mode</label>
+          <div style={{ display: 'flex', gap: 16, paddingTop: 4 }}>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 'normal' }}>
+              <input
+                type="radio"
+                name="terminalMode"
+                checked={(c.terminalMode ?? 'smart') === 'smart'}
+                onChange={() => updateContainer('terminalMode', 'smart')}
+              />
+              smart (auto)
+            </label>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 'normal' }}>
+              <input
+                type="radio"
+                name="terminalMode"
+                checked={c.terminalMode === 'exec'}
+                onChange={() => updateContainer('terminalMode', 'exec')}
+              />
+              exec (new shell)
+            </label>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 'normal' }}>
+              <input
+                type="radio"
+                name="terminalMode"
+                checked={c.terminalMode === 'attach'}
+                onChange={() => updateContainer('terminalMode', 'attach')}
+              />
+              attach (PID 1)
+            </label>
+          </div>
+        </div>
+        <div className="form-group">
           <label>Shell</label>
           <input
             className="form-control mono"
             value={c.shell ?? ''}
             onChange={(e) => updateContainer('shell', e.target.value || undefined)}
             placeholder="bash"
+            disabled={c.terminalMode === 'attach'}
           />
         </div>
         <div className="form-group">

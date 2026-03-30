@@ -34,6 +34,7 @@ export interface ContainerConfig {
   image: string
   runtime?: string
   shell?: string
+  terminalMode?: 'exec' | 'attach' | 'smart'
   ports: ContainerPort[]
   workspaceMount?: WorkspaceMount
   workdir?: string

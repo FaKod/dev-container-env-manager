@@ -1,5 +1,5 @@
 import React from 'react'
-import { SplitSquareHorizontal, SplitSquareVertical, Plus, X, LayoutGrid, Rows3 } from 'lucide-react'
+import { SplitSquareHorizontal, SplitSquareVertical, Plus, X, LayoutGrid, Rows3, Anchor } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { cleanupTerminalInstance } from './TerminalView'
 import { toast } from './Toast'
@@ -94,7 +94,13 @@ export function TerminalTabs(): React.ReactElement {
 
   return (
     <div className="terminal-tabs">
-      {!tileMode && terminals.map((t) => (
+      {!tileMode && terminals.map((t) => {
+        const profile = profiles.find(p => p.id === t.profileId)
+        const isPrimary =
+          !!profile?.container &&
+          (profile.container.terminalMode ?? 'smart') !== 'exec' &&
+          terminals.find(other => other.profileId === t.profileId) === t
+        return (
         <div
           key={t.id}
           className={`terminal-tab${activeTerminalId === t.id ? ' active' : ''}${!t.active ? ' inactive' : ''}`}
@@ -104,6 +110,9 @@ export function TerminalTabs(): React.ReactElement {
           <span className={`terminal-tab-context tab-ctx-${t.context}`}>
             {t.context}
           </span>
+          {isPrimary && (
+            <Anchor size={10} style={{ flexShrink: 0, opacity: 0.6 }} title="Primary terminal — closing this will stop the container" />
+          )}
           <span className="terminal-tab-title">{t.title}</span>
           {t.hasUnread && <span className="terminal-tab-unread" />}
           <button
@@ -115,7 +124,8 @@ export function TerminalTabs(): React.ReactElement {
             <X size={11} />
           </button>
         </div>
-      ))}
+        )
+      })}
 
       {!tileMode && activeTerminalId && !activeSplit && (
         <>

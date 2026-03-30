@@ -153,6 +153,9 @@ export function setupIpcHandlers(opts: SetupOptions): void {
   })
 
   ipcMain.handle('connection:disconnect', async (_e, profileId: string) => {
+    // Kill all terminal PTYs for this profile first so they don't outlive the connection
+    terminalManager.destroyForProfile(profileId)
+
     const profile = profileManager.getById(profileId)
     if (profile?.container) {
       try {
@@ -247,6 +250,8 @@ export function setupIpcHandlers(opts: SetupOptions): void {
   ipcMain.handle('container:remove', async (_e, profileId: string) => {
     const profile = profileManager.getById(profileId)
     if (!profile) throw new Error(`Profile ${profileId} not found`)
+    // Kill terminals before removing so they don't reconnect to a new container
+    terminalManager.destroyForProfile(profileId)
     await containerManager.remove(profile)
     mainWindow.webContents.send('container:stateChanged', profileId, {
       profileId,
@@ -258,6 +263,8 @@ export function setupIpcHandlers(opts: SetupOptions): void {
   ipcMain.handle('container:recreate', async (_e, profileId: string) => {
     const profile = profileManager.getById(profileId)
     if (!profile) throw new Error(`Profile ${profileId} not found`)
+    // Kill terminals before recreating so they don't reconnect to the new container
+    terminalManager.destroyForProfile(profileId)
     await containerManager.recreate(profile)
     mainWindow.webContents.send('container:stateChanged', profileId, {
       profileId,
@@ -313,6 +320,31 @@ export function setupIpcHandlers(opts: SetupOptions): void {
       filters: [{ name: 'JSON', extensions: ['json'] }]
     })
     return result.canceled ? null : result.filePath
+  })
+
+  // ─── Auto-disconnect when last terminal for a profile closes ───────────────
+
+  terminalManager.on('profileTerminalsEmpty', async (profileId: string) => {
+    const connState = connectionManager.getState(profileId)
+    if (!connState || connState.status === 'disconnected') return
+
+    const profile = profileManager.getById(profileId)
+    if (profile?.container) {
+      try {
+        const state = await containerManager.getStatus(profile)
+        if (state.status === 'running') {
+          await containerManager.stop(profile)
+          try {
+            if (!mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('container:stateChanged', profileId, {
+                profileId, status: 'stopped', containerName: profile.container.name
+              })
+            }
+          } catch { /* window destroyed */ }
+        }
+      } catch { /* ignore stop errors */ }
+    }
+    await connectionManager.disconnect(profileId)
   })
 
   // ─── Forward event-log entries to renderer ─────────────────────────────────

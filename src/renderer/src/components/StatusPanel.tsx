@@ -83,8 +83,13 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
           : 'recreateContainer'
       ](profileId)
 
-      // Open a terminal after start, restart, or recreate
+      // Open a terminal after start, restart, or recreate.
+      // In attach mode, give the container's PID 1 a moment to initialize its TTY
+      // before docker attach connects, otherwise attach may fail immediately.
       if (action === 'start' || action === 'restart' || action === 'recreate') {
+        if (profile?.container?.terminalMode === 'attach') {
+          await new Promise((r) => setTimeout(r, 600))
+        }
         await openContainerTerminal()
       }
 

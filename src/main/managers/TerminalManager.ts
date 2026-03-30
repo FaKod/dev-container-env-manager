@@ -18,6 +18,7 @@ interface TerminalEntry {
 export class TerminalManager extends EventEmitter {
   private terminals = new Map<string, TerminalEntry>()
   private logger: EventLogManager
+  private suppressAutoDisconnect = new Set<string>()
 
   constructor(logger: EventLogManager) {
     super()
@@ -36,7 +37,7 @@ export class TerminalManager extends EventEmitter {
     const { command, args } = await this.buildCommand(profile, context)
     this.logger.debug(
       'TerminalManager',
-      `Spawning terminal: ${command} ${args.join(' ')}`,
+      `Spawning terminal [mode=${profile.container?.terminalMode ?? 'smart'}]: ${command} ${args.join(' ')}`,
       profile.id
     )
 
@@ -83,6 +84,7 @@ export class TerminalManager extends EventEmitter {
       if (e) {
         e.session.active = false
         safeSend('terminal:exited', id)
+        this.checkAutoDisconnect(e.session.profileId)
       }
     })
 
@@ -118,8 +120,31 @@ export class TerminalManager extends EventEmitter {
     }
 
     const containerName = profile.container.name
+    const mode = profile.container.terminalMode ?? 'smart'
 
-    // Use configured shell, or detect CMD from container image
+    if (mode === 'attach' || mode === 'smart') {
+      const activeForProfile = Array.from(this.terminals.values()).filter(
+        (e) => e.session.profileId === profile.id && e.session.active
+      ).length
+
+      if (activeForProfile === 0) {
+        return {
+          command: 'ssh',
+          args: [
+            ...commonSSHOpts,
+            '-t',
+            sshTarget,
+            'docker', 'attach',
+            '--sig-proxy=false',
+            '--detach-keys=',
+            containerName
+          ]
+        }
+      }
+      // >0 active terminals already open — fall through to docker exec
+    }
+
+    // exec (default): spawn a new shell inside the container
     let shellArgs: string[]
     if (profile.container.shell) {
       shellArgs = profile.container.shell.split(/\s+/).filter(Boolean)
@@ -200,8 +225,16 @@ export class TerminalManager extends EventEmitter {
   destroy(terminalId: string): void {
     const entry = this.terminals.get(terminalId)
     if (!entry) return
+    const profileId = entry.session.profileId
     this.terminals.delete(terminalId)
     this.logger.info('TerminalManager', `Destroyed terminal ${terminalId}`)
+
+    // Notify the renderer immediately so it can update UI
+    try {
+      if (!entry.mainWindow.isDestroyed()) {
+        entry.mainWindow.webContents.send('terminal:exited', terminalId)
+      }
+    } catch { /* window destroyed */ }
 
     // Send 'exit' so the remote shell (and docker exec) exits cleanly
     try { entry.pty.write('exit\n') } catch { /* already dead */ }
@@ -210,14 +243,26 @@ export class TerminalManager extends EventEmitter {
     setTimeout(() => {
       try { entry.pty.kill() } catch { /* already dead */ }
     }, 300)
+
+    this.checkAutoDisconnect(profileId)
   }
 
   destroyForProfile(profileId: string): void {
+    this.suppressAutoDisconnect.add(profileId)
     for (const [id, entry] of this.terminals.entries()) {
       if (entry.session.profileId === profileId) {
         this.destroy(id)
       }
     }
+    this.suppressAutoDisconnect.delete(profileId)
+  }
+
+  private checkAutoDisconnect(profileId: string): void {
+    if (this.suppressAutoDisconnect.has(profileId)) return
+    const hasActive = Array.from(this.terminals.values()).some(
+      (e) => e.session.profileId === profileId && e.session.active
+    )
+    if (!hasActive) this.emit('profileTerminalsEmpty', profileId)
   }
 
   getSessions(): TerminalSession[] {
