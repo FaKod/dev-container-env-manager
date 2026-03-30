@@ -77,6 +77,23 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', async () => {
+  const profiles = profileManager.getAll()
+  await Promise.allSettled(
+    profiles.map(async (profile) => {
+      const conn = connectionManager.getState(profile.id)
+      if (!conn || conn.status === 'disconnected') return
+      if (!profile.container) return
+      const behavior = profile.connectionPolicy.onDisconnectBehavior ?? 'stop'
+      try {
+        const state = await containerManager.getStatus(profile)
+        if (state.status === 'running') {
+          if (behavior === 'stop') await containerManager.stop(profile)
+          else if (behavior === 'pause') await containerManager.pause(profile)
+          // 'leave' → do nothing
+        }
+      } catch { /* ignore errors on shutdown */ }
+    })
+  )
   await connectionManager.disconnectAll()
   if (process.platform !== 'darwin') app.quit()
 })

@@ -54,7 +54,7 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
   if (!profile) return <></>
 
   function containerAction(
-    action: 'start' | 'stop' | 'restart' | 'remove' | 'recreate'
+    action: 'start' | 'stop' | 'restart' | 'remove' | 'recreate' | 'pause' | 'unpause'
   ): void {
     if (action === 'remove') {
       const name = profile?.container?.name ?? 'this container'
@@ -67,7 +67,7 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
   }
 
   async function runContainerAction(
-    action: 'start' | 'stop' | 'restart' | 'remove' | 'recreate'
+    action: 'start' | 'stop' | 'restart' | 'remove' | 'recreate' | 'pause' | 'unpause'
   ): Promise<void> {
     setContainerBusy(true)
     try {
@@ -80,6 +80,10 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
           ? 'restartContainer'
           : action === 'remove'
           ? 'removeContainer'
+          : action === 'pause'
+          ? 'pauseContainer'
+          : action === 'unpause'
+          ? 'unpauseContainer'
           : 'recreateContainer'
       ](profileId)
 
@@ -96,6 +100,11 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
       // Disconnect SSH when container is stopped or removed
       if (action === 'stop' || action === 'remove') {
         await window.api.disconnect(profileId)
+      }
+
+      // Unpause opens a terminal if none are open
+      if (action === 'unpause') {
+        await openContainerTerminal()
       }
     } catch (err) {
       toast(`Container ${action} failed: ${err}`)
@@ -199,14 +208,31 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
             <button
               className="btn btn-success btn-sm"
               onClick={() => containerAction('start')}
-              disabled={containerBusy || containerState?.status === 'running'}
+              disabled={containerBusy || containerState?.status === 'running' || containerState?.status === 'paused'}
             >
               Start
             </button>
+            {containerState?.status === 'paused' ? (
+              <button
+                className="btn btn-warning btn-sm"
+                onClick={() => containerAction('unpause')}
+                disabled={containerBusy}
+              >
+                Unpause
+              </button>
+            ) : (
+              <button
+                className="btn btn-warning btn-sm"
+                onClick={() => containerAction('pause')}
+                disabled={containerBusy || containerState?.status !== 'running'}
+              >
+                Pause
+              </button>
+            )}
             <button
               className="btn btn-warning btn-sm"
               onClick={() => containerAction('stop')}
-              disabled={containerBusy || containerState?.status !== 'running'}
+              disabled={containerBusy || (containerState?.status !== 'running' && containerState?.status !== 'paused')}
             >
               Stop
             </button>
@@ -235,6 +261,7 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
             <button
               className="btn btn-ghost btn-sm"
               onClick={openContainerTerminal}
+              disabled={containerState?.status === 'paused'}
             >
               Shell
             </button>
@@ -256,7 +283,7 @@ function ConnectionStatusBadge({ status }: { status: string }): React.ReactEleme
 
 function ContainerStatusBadge({ status }: { status: ContainerStatus }): React.ReactElement {
   const cls: Record<string, string> = {
-    running: 'connected', stopped: 'connecting', starting: 'connecting',
+    running: 'connected', stopped: 'connecting', paused: 'reconnecting', starting: 'connecting',
     stopping: 'connecting', failed: 'failed', 'not-found': 'disconnected', unknown: 'disconnected'
   }
   return <span className={`status-badge ${cls[status] ?? 'disconnected'}`}><span className="dot" />{status}</span>

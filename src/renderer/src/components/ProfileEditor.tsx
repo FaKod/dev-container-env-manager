@@ -672,6 +672,23 @@ function PolicyTab({ draft, onChange }: TabProps): React.ReactElement {
           <option value="ask">Ask each time</option>
         </select>
       </div>
+      <div className="form-group">
+        <label>On Disconnect</label>
+        <select
+          className="form-control"
+          value={p.onDisconnectBehavior ?? 'stop'}
+          onChange={(e) =>
+            updatePolicy(
+              'onDisconnectBehavior',
+              e.target.value as typeof p.onDisconnectBehavior
+            )
+          }
+        >
+          <option value="stop">Stop container</option>
+          <option value="pause">Pause container</option>
+          <option value="leave">Leave running</option>
+        </select>
+      </div>
     </div>
   )
 }

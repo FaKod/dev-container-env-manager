@@ -116,14 +116,21 @@ export function setupIpcHandlers(opts: SetupOptions): void {
         await containerManager.start(profile)
 
       } else if (behavior === 'attach') {
-        if (current.status !== 'running') {
+        if (current.status === 'paused') {
+          eventLogManager.info('Launch', `Unpausing container "${name}"`, profileId)
+          await containerManager.unpause(profile)
+        } else if (current.status !== 'running') {
           throw new Error(`Container "${name}" is not running (status: ${current.status})`)
+        } else {
+          eventLogManager.info('Launch', `Attaching to running container "${name}"`, profileId)
         }
-        eventLogManager.info('Launch', `Attaching to running container "${name}"`, profileId)
 
       } else if (behavior === 'start') {
         if (current.status === 'running') {
           eventLogManager.info('Launch', `Attaching to running container "${name}"`, profileId)
+        } else if (current.status === 'paused') {
+          eventLogManager.info('Launch', `Unpausing container "${name}"`, profileId)
+          await containerManager.unpause(profile)
         } else if (current.status === 'stopped') {
           eventLogManager.info('Launch', `Starting stopped container "${name}"`, profileId)
           await containerManager.start(profile)
@@ -135,6 +142,9 @@ export function setupIpcHandlers(opts: SetupOptions): void {
         // 'attach-or-recreate' (default) or 'ask' (falls back to attach-or-recreate)
         if (current.status === 'running') {
           eventLogManager.info('Launch', `Attaching to running container "${name}"`, profileId)
+        } else if (current.status === 'paused') {
+          eventLogManager.info('Launch', `Unpausing container "${name}"`, profileId)
+          await containerManager.unpause(profile)
         } else {
           eventLogManager.info('Launch', `Starting/creating container "${name}"`, profileId)
           await containerManager.start(profile)
@@ -152,15 +162,15 @@ export function setupIpcHandlers(opts: SetupOptions): void {
     await connectionManager.connect(profile, mainWindow)
   })
 
-  ipcMain.handle('connection:disconnect', async (_e, profileId: string) => {
-    // Kill all terminal PTYs for this profile first so they don't outlive the connection
-    terminalManager.destroyForProfile(profileId)
-
+  // Shared helper: apply onDisconnectBehavior policy to a profile's container
+  async function applyDisconnectBehavior(profileId: string): Promise<void> {
     const profile = profileManager.getById(profileId)
-    if (profile?.container) {
-      try {
-        const state = await containerManager.getStatus(profile)
-        if (state.status === 'running') {
+    if (!profile?.container) return
+    const behavior = profile.connectionPolicy.onDisconnectBehavior ?? 'stop'
+    try {
+      const state = await containerManager.getStatus(profile)
+      if (state.status === 'running') {
+        if (behavior === 'stop') {
           await containerManager.stop(profile)
           try {
             if (!mainWindow.isDestroyed()) {
@@ -169,9 +179,28 @@ export function setupIpcHandlers(opts: SetupOptions): void {
               })
             }
           } catch { /* window destroyed */ }
+        } else if (behavior === 'pause') {
+          await containerManager.pause(profile)
+          try {
+            if (!mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('container:stateChanged', profileId, {
+                profileId, status: 'paused', containerName: profile.container.name
+              })
+            }
+          } catch { /* window destroyed */ }
         }
-      } catch { /* ignore stop errors on disconnect */ }
-    }
+        // 'leave' → do nothing
+      }
+    } catch { /* ignore errors on disconnect */ }
+  }
+
+  ipcMain.handle('connection:disconnect', async (_e, profileId: string) => {
+    const profile = profileManager.getById(profileId)
+    const behavior = profile?.connectionPolicy.onDisconnectBehavior ?? 'stop'
+    // Hard-kill PTYs (no exit\n) when pausing so the buffered command
+    // doesn't reach the shell when the container is later unpaused
+    terminalManager.destroyForProfile(profileId, behavior === 'pause')
+    await applyDisconnectBehavior(profileId)
     await connectionManager.disconnect(profileId)
   })
 
@@ -273,6 +302,24 @@ export function setupIpcHandlers(opts: SetupOptions): void {
     })
   })
 
+  ipcMain.handle('container:pause', async (_e, profileId: string) => {
+    const profile = profileManager.getById(profileId)
+    if (!profile) throw new Error(`Profile ${profileId} not found`)
+    await containerManager.pause(profile)
+    mainWindow.webContents.send('container:stateChanged', profileId, {
+      profileId, status: 'paused', containerName: profile.container?.name
+    })
+  })
+
+  ipcMain.handle('container:unpause', async (_e, profileId: string) => {
+    const profile = profileManager.getById(profileId)
+    if (!profile) throw new Error(`Profile ${profileId} not found`)
+    await containerManager.unpause(profile)
+    mainWindow.webContents.send('container:stateChanged', profileId, {
+      profileId, status: 'running', containerName: profile.container?.name
+    })
+  })
+
   ipcMain.handle('container:logs', async (_e, profileId: string, lines: number) => {
     const profile = profileManager.getById(profileId)
     if (!profile) return ''
@@ -327,23 +374,7 @@ export function setupIpcHandlers(opts: SetupOptions): void {
   terminalManager.on('profileTerminalsEmpty', async (profileId: string) => {
     const connState = connectionManager.getState(profileId)
     if (!connState || connState.status === 'disconnected') return
-
-    const profile = profileManager.getById(profileId)
-    if (profile?.container) {
-      try {
-        const state = await containerManager.getStatus(profile)
-        if (state.status === 'running') {
-          await containerManager.stop(profile)
-          try {
-            if (!mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('container:stateChanged', profileId, {
-                profileId, status: 'stopped', containerName: profile.container.name
-              })
-            }
-          } catch { /* window destroyed */ }
-        }
-      } catch { /* ignore stop errors */ }
-    }
+    await applyDisconnectBehavior(profileId)
     await connectionManager.disconnect(profileId)
   })
 

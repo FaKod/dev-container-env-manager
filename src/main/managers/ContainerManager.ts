@@ -54,6 +54,7 @@ export class ContainerManager {
 
       if (raw === 'not-found' || raw === '') status = 'not-found'
       else if (raw === 'running') status = 'running'
+      else if (raw === 'paused') status = 'paused'
       else if (raw === 'exited' || raw === 'dead') status = 'stopped'
       else if (raw === 'created') status = 'stopped'
       else status = 'unknown'
@@ -87,6 +88,20 @@ export class ContainerManager {
 
     this.logger.info('ContainerManager', `Stopping container ${name}`, profile.id)
     await this.sshExec(profile, `docker stop ${name}`)
+  }
+
+  async pause(profile: Profile): Promise<void> {
+    if (!profile.container) throw new Error('No container configured')
+    const { name } = profile.container
+    this.logger.info('ContainerManager', `Pausing container ${name}`, profile.id)
+    await this.sshExec(profile, `docker pause ${name}`)
+  }
+
+  async unpause(profile: Profile): Promise<void> {
+    if (!profile.container) throw new Error('No container configured')
+    const { name } = profile.container
+    this.logger.info('ContainerManager', `Unpausing container ${name}`, profile.id)
+    await this.sshExec(profile, `docker unpause ${name}`)
   }
 
   async restart(profile: Profile): Promise<void> {

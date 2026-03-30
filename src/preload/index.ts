@@ -110,6 +110,12 @@ const api = {
   recreateContainer: (profileId: string): Promise<void> =>
     ipcRenderer.invoke('container:recreate', profileId),
 
+  pauseContainer: (profileId: string): Promise<void> =>
+    ipcRenderer.invoke('container:pause', profileId),
+
+  unpauseContainer: (profileId: string): Promise<void> =>
+    ipcRenderer.invoke('container:unpause', profileId),
+
   getContainerLogs: (profileId: string, lines?: number): Promise<string> =>
     ipcRenderer.invoke('container:logs', profileId, lines ?? 100),
 

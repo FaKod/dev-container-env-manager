@@ -54,6 +54,7 @@ export interface ConnectionPolicy {
   autoConnectOnStart?: boolean
   preventDuplicateConnections?: boolean
   existingContainerBehavior?: 'attach' | 'start' | 'recreate' | 'ask' | 'attach-or-recreate'
+  onDisconnectBehavior?: 'stop' | 'pause' | 'leave'
   reconnectDelay?: number
   maxReconnectAttempts?: number
 }
@@ -117,6 +118,7 @@ export type ContainerStatus =
   | 'not-found'
   | 'running'
   | 'stopped'
+  | 'paused'
   | 'failed'
   | 'starting'
   | 'stopping'
