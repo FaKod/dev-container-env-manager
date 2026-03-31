@@ -6,6 +6,10 @@ import type { Profile, PortForward } from '../../../shared/types'
 
 type DraftProfile = Omit<Profile, 'id' | 'createdAt' | 'updatedAt'>
 
+function toContainerName(s: string): string {
+  return s.trim().replace(/[^a-zA-Z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '') || 'container'
+}
+
 function emptyDraft(): DraftProfile {
   return {
     name: '',
@@ -90,8 +94,8 @@ export function ProfileEditor(): React.ReactElement {
     setDraft((d) => {
       const next = { ...d, [key]: value }
       // Keep container name in sync with profile name unless manually diverged
-      if (key === 'name' && d.container && d.container.name === d.name) {
-        next.container = { ...d.container, name: value as string }
+      if (key === 'name' && d.container && d.container.name === toContainerName(d.name)) {
+        next.container = { ...d.container, name: toContainerName(value as string) }
       }
       return next
     })
@@ -104,9 +108,9 @@ export function ProfileEditor(): React.ReactElement {
 
     setSaving(true)
     try {
-      // Ensure container name always falls back to profile name
+      // Ensure container name always falls back to a sanitized profile name
       const finalDraft = draft.container && !draft.container.name.trim()
-        ? { ...draft, container: { ...draft.container, name: draft.name.trim() } }
+        ? { ...draft, container: { ...draft.container, name: toContainerName(draft.name.trim()) } }
         : draft
 
       if (existing) {
