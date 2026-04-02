@@ -25,6 +25,7 @@ No more juggling terminal windows. No more forgetting which container is running
 
 ### SSH + Container Lifecycle
 - Full **SSH tunnel management** with keepalive, identity file, custom options, and reconnect policies
+- **Local machine mode** — run containers directly on your own machine without any SSH; enable it per-profile with a single checkbox
 - **Docker container control** directly from the UI — Start, Stop, Restart, Recreate, Delete
 - Auto-detects the container's default shell from its image `CMD`
 - **Port forward monitoring** with live active/inactive status per tunnel
@@ -77,6 +78,19 @@ npm run dist
 # Output: dist/FaKods Legendary DevContainer Manager-1.0.0.AppImage
 ```
 
+### Build DMG (macOS)
+
+Run this on a macOS machine with Xcode command-line tools installed:
+
+```bash
+xcode-select --install   # one-time setup
+npm install
+npm run dist:mac
+# Output: dist/FaKods Legendary DevContainer Manager-1.0.0.dmg
+```
+
+Produces separate `.dmg` files for Intel (`x64`) and Apple Silicon (`arm64`).
+
 ---
 
 ## Architecture
@@ -116,6 +130,32 @@ Theme: **Catppuccin** Mocha / Latte
 | `Ctrl+0` | Reset font size |
 | `Ctrl+L` | Clear scrollback |
 | Right-click | Paste from clipboard |
+
+---
+
+## Local Machine Mode
+
+Profiles are SSH-first by default, but you can run everything locally — no SSH required. This is useful for managing Docker containers that run on the same machine as the app.
+
+### How to enable
+
+1. Open the **Profile Editor** → **General** tab
+2. Check **Local machine (no SSH)**
+3. The SSH tab disappears — it isn't needed
+4. Configure your container as usual on the **Container** tab
+5. Use **Port Mappings** (replaces Port Forwards) to expose container ports directly on the host
+
+### What changes in local mode
+
+| | SSH mode | Local mode |
+|---|---|---|
+| Connection | SSH tunnel to remote host | No network connection |
+| Container exec | `ssh host docker exec -it` | `docker exec -it` directly |
+| Port mapping | SSH `-L` forward + `-p host:container` | `-p host:container` only |
+| Terminal (ssh context) | Remote SSH shell | Local shell |
+| Port auto-detect | Runs via SSH | Runs locally |
+
+The status panel shows **Local Machine** instead of SSH Connection, and the profile card displays "Local machine" in place of the hostname.
 
 ---
 
