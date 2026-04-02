@@ -334,8 +334,9 @@ export function setupIpcHandlers(opts: SetupOptions): void {
       user: string | undefined,
       port: number | undefined,
       identityFile: string | undefined,
-      image: string
-    ) => containerManager.detectImagePorts(host, user, port, identityFile, image)
+      image: string,
+      local: boolean
+    ) => containerManager.detectImagePorts(host, user, port, identityFile, image, local)
   )
 
   // ─── Logs ──────────────────────────────────────────────────────────────────

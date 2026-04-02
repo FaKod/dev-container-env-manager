@@ -124,9 +124,10 @@ const api = {
     user: string | undefined,
     port: number | undefined,
     identityFile: string | undefined,
-    image: string
+    image: string,
+    local?: boolean
   ): Promise<number[]> =>
-    ipcRenderer.invoke('container:detectPorts', host, user, port, identityFile, image),
+    ipcRenderer.invoke('container:detectPorts', host, user, port, identityFile, image, local ?? false),
 
   // ── Logs ──────────────────────────────────────────────────────────────────
   getLogs: (profileId?: string): Promise<LogEntry[]> =>

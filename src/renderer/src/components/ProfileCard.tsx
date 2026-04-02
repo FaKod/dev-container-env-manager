@@ -126,7 +126,7 @@ export function ProfileCard({ profile }: Props): React.ReactElement {
         </div>
         <StatusBadge status={status} />
       </div>
-      <div className="profile-host">{profile.ssh.host}</div>
+      <div className="profile-host">{profile.local ? 'Local machine' : profile.ssh.host}</div>
 
       <div className="profile-card-actions" onClick={(e) => e.stopPropagation()}>
         {isConnected || isConnecting ? (

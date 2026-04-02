@@ -141,7 +141,7 @@ export class ProfileManager {
     if (typeof data.name !== 'string' || !data.name.trim()) {
       throw new Error('Import failed: profile must have a name')
     }
-    if (!data.ssh || typeof data.ssh.host !== 'string' || !data.ssh.host.trim()) {
+    if (!data.local && (!data.ssh || typeof data.ssh.host !== 'string' || !data.ssh.host.trim())) {
       throw new Error('Import failed: profile must have an SSH host')
     }
     const now = new Date().toISOString()

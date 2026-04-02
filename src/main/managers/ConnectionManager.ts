@@ -47,6 +47,22 @@ export class ConnectionManager extends EventEmitter {
       clearTimeout(existing.reconnectTimer)
     }
 
+    // Local profiles need no SSH tunnel — mark as connected immediately
+    if (profile.local) {
+      const entry: ConnectionEntry = {
+        profileId: profile.id,
+        process: null,
+        state: { profileId: profile.id, status: 'connected', portForwards: [] },
+        reconnectTimer: null,
+        reconnectAttempts: 0,
+        mainWindow
+      }
+      this.connections.set(profile.id, entry)
+      this.logger.info('ConnectionManager', 'Local profile — no SSH tunnel needed', profile.id)
+      this.emitStateChange(profile.id)
+      return
+    }
+
     const portForwards: PortForwardState[] = (profile.ssh.forwards ?? []).map((f) => ({
       forward: f,
       active: false

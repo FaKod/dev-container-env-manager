@@ -12,7 +12,19 @@ export class ContainerManager {
     this.logger = logger
   }
 
-  // ─── SSH exec helper ────────────────────────────────────────────────────────
+  // ─── Exec helpers ────────────────────────────────────────────────────────────
+
+  private async localExec(command: string): Promise<string> {
+    this.logger.debug('ContainerManager', `local exec: ${command}`)
+    const { stdout, stderr } = await execAsync(command, { timeout: 30000 })
+    if (stderr) this.logger.debug('ContainerManager', `stderr: ${stderr.trim()}`)
+    return stdout.trim()
+  }
+
+  private async exec(profile: Profile, command: string): Promise<string> {
+    if (profile.local) return this.localExec(command)
+    return this.sshExec(profile, command)
+  }
 
   private async sshExec(profile: Profile, remoteCommand: string): Promise<string> {
     const sshTarget = profile.ssh.user
@@ -44,7 +56,7 @@ export class ContainerManager {
     const name = profile.container.name
 
     try {
-      const out = await this.sshExec(
+      const out = await this.exec(
         profile,
         `docker inspect --format '{{.State.Status}}' ${name} 2>/dev/null || echo 'not-found'`
       )
@@ -78,7 +90,7 @@ export class ContainerManager {
     if (status.status === 'not-found') {
       await this.run(profile)
     } else {
-      await this.sshExec(profile, `docker start ${name}`)
+      await this.exec(profile, `docker start ${name}`)
     }
   }
 
@@ -87,21 +99,21 @@ export class ContainerManager {
     const { name } = profile.container
 
     this.logger.info('ContainerManager', `Stopping container ${name}`, profile.id)
-    await this.sshExec(profile, `docker stop ${name}`)
+    await this.exec(profile, `docker stop ${name}`)
   }
 
   async pause(profile: Profile): Promise<void> {
     if (!profile.container) throw new Error('No container configured')
     const { name } = profile.container
     this.logger.info('ContainerManager', `Pausing container ${name}`, profile.id)
-    await this.sshExec(profile, `docker pause ${name}`)
+    await this.exec(profile, `docker pause ${name}`)
   }
 
   async unpause(profile: Profile): Promise<void> {
     if (!profile.container) throw new Error('No container configured')
     const { name } = profile.container
     this.logger.info('ContainerManager', `Unpausing container ${name}`, profile.id)
-    await this.sshExec(profile, `docker unpause ${name}`)
+    await this.exec(profile, `docker unpause ${name}`)
   }
 
   async restart(profile: Profile): Promise<void> {
@@ -109,7 +121,7 @@ export class ContainerManager {
     const { name } = profile.container
 
     this.logger.info('ContainerManager', `Restarting container ${name}`, profile.id)
-    await this.sshExec(profile, `docker restart ${name}`)
+    await this.exec(profile, `docker restart ${name}`)
   }
 
   async remove(profile: Profile): Promise<void> {
@@ -117,7 +129,7 @@ export class ContainerManager {
     const { name } = profile.container
 
     this.logger.info('ContainerManager', `Removing container ${name}`, profile.id)
-    await this.sshExec(profile, `docker rm -f ${name}`)
+    await this.exec(profile, `docker rm -f ${name}`)
   }
 
   async recreate(profile: Profile): Promise<void> {
@@ -132,7 +144,7 @@ export class ContainerManager {
     if (!profile.container) throw new Error('No container configured')
     const cmd = this.buildDockerRunCommand(profile)
     this.logger.info('ContainerManager', `Running: ${cmd}`, profile.id)
-    await this.sshExec(profile, cmd)
+    await this.exec(profile, cmd)
   }
 
   // ─── Command builder ─────────────────────────────────────────────────────────
@@ -147,15 +159,22 @@ export class ContainerManager {
 
     parts.push('--name', c.name)
 
-    // Derive container port mappings from SSH forwards:
-    // SSH:    -L localPort:localhost:remotePort
-    // Docker: -p remotePort:containerPort  (containerPort defaults to remotePort)
-    const forwards = (profile.ssh.forwards ?? [])
-      .filter((f) => f.remoteHost === 'localhost' || f.remoteHost === '127.0.0.1')
+    if (profile.local) {
+      // Local profiles: port mappings come directly from container.ports
+      for (const port of c.ports) {
+        parts.push('-p', `${port.hostPort}:${port.containerPort}`)
+      }
+    } else {
+      // Remote profiles: derive port mappings from SSH forwards
+      // SSH:    -L localPort:localhost:remotePort
+      // Docker: -p remotePort:containerPort  (containerPort defaults to remotePort)
+      const forwards = (profile.ssh.forwards ?? [])
+        .filter((f) => f.remoteHost === 'localhost' || f.remoteHost === '127.0.0.1')
 
-    for (const fwd of forwards) {
-      const containerPort = fwd.containerPort ?? fwd.remotePort
-      parts.push('-p', `${fwd.remotePort}:${containerPort}`)
+      for (const fwd of forwards) {
+        const containerPort = fwd.containerPort ?? fwd.remotePort
+        parts.push('-p', `${fwd.remotePort}:${containerPort}`)
+      }
     }
 
     if (c.workspaceMount) {
@@ -189,18 +208,31 @@ export class ContainerManager {
     sshUser: string | undefined,
     sshPort: number | undefined,
     sshIdentityFile: string | undefined,
-    image: string
+    image: string,
+    local = false
   ): Promise<number[]> {
-    const target = sshUser ? `${sshUser}@${sshHost}` : sshHost
-    const opts: string[] = []
-    if (sshIdentityFile) opts.push('-i', sshIdentityFile)
-    if (sshPort) opts.push('-p', String(sshPort))
-    opts.push('-o', 'StrictHostKeyChecking=accept-new')
-    opts.push('-o', 'BatchMode=yes')
-    opts.push('-o', 'ConnectTimeout=10')
+    let stdout: string
 
-    const sshCmd = `ssh ${opts.join(' ')} ${target} ${JSON.stringify(`docker image inspect --format '{{json .Config.ExposedPorts}}' ${image}`)}`
-    const { stdout } = await execAsync(sshCmd, { timeout: 15000 })
+    if (local) {
+      const result = await execAsync(
+        `docker image inspect --format '{{json .Config.ExposedPorts}}' ${image}`,
+        { timeout: 15000 }
+      )
+      stdout = result.stdout
+    } else {
+      const target = sshUser ? `${sshUser}@${sshHost}` : sshHost
+      const opts: string[] = []
+      if (sshIdentityFile) opts.push('-i', sshIdentityFile)
+      if (sshPort) opts.push('-p', String(sshPort))
+      opts.push('-o', 'StrictHostKeyChecking=accept-new')
+      opts.push('-o', 'BatchMode=yes')
+      opts.push('-o', 'ConnectTimeout=10')
+
+      const sshCmd = `ssh ${opts.join(' ')} ${target} ${JSON.stringify(`docker image inspect --format '{{json .Config.ExposedPorts}}' ${image}`)}`
+      const result = await execAsync(sshCmd, { timeout: 15000 })
+      stdout = result.stdout
+    }
+
     const raw = stdout.trim()
     if (!raw || raw === 'null') return []
 

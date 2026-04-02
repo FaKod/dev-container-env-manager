@@ -13,6 +13,7 @@ function toContainerName(s: string): string {
 function emptyDraft(): DraftProfile {
   return {
     name: '',
+    local: false,
     ssh: {
       host: '',
       user: '',
@@ -49,6 +50,7 @@ function emptyDraft(): DraftProfile {
 function profileToDraft(p: Profile): DraftProfile {
   return {
     name: p.name,
+    local: p.local ?? false,
     ssh: { ...p.ssh, forwards: [...(p.ssh.forwards ?? [])] },
     terminal: { ...p.terminal },
     container: p.container
@@ -99,12 +101,16 @@ export function ProfileEditor(): React.ReactElement {
       }
       return next
     })
+    // If switching to local mode while on the SSH tab, jump back to general
+    if (key === 'local' && value === true && activeTab === 'ssh') {
+      setActiveTab('general')
+    }
     setIsDirty(true)
   }
 
   async function handleSave(): Promise<void> {
     if (!draft.name.trim()) { toast('Profile name is required'); return }
-    if (!draft.ssh.host.trim()) { toast('SSH host is required'); return }
+    if (!draft.local && !draft.ssh.host.trim()) { toast('SSH host is required'); return }
 
     setSaving(true)
     try {
@@ -141,7 +147,9 @@ export function ProfileEditor(): React.ReactElement {
     if (e.target === e.currentTarget) handleClose()
   }
 
-  const tabs = ['general', 'ssh', 'container', 'policy'] as const
+  const tabs = (draft.local
+    ? ['general', 'container', 'policy']
+    : ['general', 'ssh', 'container', 'policy']) as ('general' | 'ssh' | 'container' | 'policy')[]
 
   return (
     <div className="modal-overlay" onClick={handleOverlayClick}>
@@ -241,10 +249,30 @@ function GeneralTab({ draft, onChange, firstInputRef }: TabProps): React.ReactEl
     onChange('ssh', { ...draft.ssh, forwards: fwds })
   }
 
+  function addLocalPort(): void {
+    onChange('container', {
+      ...draft.container!,
+      ports: [...(draft.container?.ports ?? []), { hostPort: 3000, containerPort: 3000 }]
+    })
+  }
+
+  function removeLocalPort(i: number): void {
+    onChange('container', {
+      ...draft.container!,
+      ports: (draft.container?.ports ?? []).filter((_, idx) => idx !== i)
+    })
+  }
+
+  function updateLocalPort(i: number, hostPort: number, containerPort: number): void {
+    const ports = [...(draft.container?.ports ?? [])]
+    ports[i] = { hostPort, containerPort }
+    onChange('container', { ...draft.container!, ports })
+  }
+
   async function autoDetectPorts(): Promise<void> {
     const image = draft.container?.image?.trim()
     if (!image) { toast('Set the container image first (Container tab)'); return }
-    if (!draft.ssh.host?.trim()) { toast('Set the SSH host first'); return }
+    if (!draft.local && !draft.ssh.host?.trim()) { toast('Set the SSH host first'); return }
     setDetecting(true)
     try {
       const ports = await window.api.detectContainerPorts(
@@ -252,16 +280,24 @@ function GeneralTab({ draft, onChange, firstInputRef }: TabProps): React.ReactEl
         draft.ssh.user || undefined,
         draft.ssh.port,
         draft.ssh.identityFile || undefined,
-        image
+        image,
+        draft.local ?? false
       )
       if (ports.length === 0) {
         toast('No EXPOSE ports found in image', 'info')
         return
       }
-      onChange('ssh', {
-        ...draft.ssh,
-        forwards: ports.map((p) => ({ localPort: p, remoteHost: 'localhost', remotePort: p, containerPort: p }))
-      })
+      if (draft.local) {
+        onChange('container', {
+          ...draft.container!,
+          ports: ports.map((p) => ({ hostPort: p, containerPort: p }))
+        })
+      } else {
+        onChange('ssh', {
+          ...draft.ssh,
+          forwards: ports.map((p) => ({ localPort: p, remoteHost: 'localhost', remotePort: p, containerPort: p }))
+        })
+      }
       toast(`Detected ${ports.length} port(s): ${ports.join(', ')}`, 'info')
     } catch (err) {
       toast(`Port detection failed: ${err}`)
@@ -283,59 +319,125 @@ function GeneralTab({ draft, onChange, firstInputRef }: TabProps): React.ReactEl
           placeholder="e.g. aiact-anthropic"
         />
       </div>
-
-      <div className="form-section-title" style={{ marginTop: 8 }}>
-        Port Forwards
-        <button className="btn btn-ghost btn-sm" style={{ marginLeft: 8 }} onClick={addForward}>
-          + Add
-        </button>
-        <button
-          className="btn btn-ghost btn-sm"
-          style={{ marginLeft: 4 }}
-          onClick={autoDetectPorts}
-          disabled={detecting}
-          title="Detect EXPOSE ports from container image"
-        >
-          {detecting ? 'Detecting…' : 'Auto-detect'}
-        </button>
-      </div>
-      <div style={{ fontSize: 11, color: 'var(--overlay1)', marginBottom: 6 }}>
-        Host port: used as the SSH local/remote port (<code>-L n:localhost:n</code>) and the Docker host port (<code>-p host:container</code>).
-        Container port: the port inside the container.
-      </div>
-      {draft.ssh.forwards.map((fwd, i) => (
-        <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginBottom: 6 }}>
-          <div className="form-group" style={{ maxWidth: 110, marginBottom: 0 }}>
-            <label>Host port</label>
-            <input
-              className="form-control"
-              type="number"
-              value={fwd.localPort}
-              onChange={(e) => {
-                const port = Number(e.target.value)
-                updateForward(i, { ...fwd, localPort: port, remotePort: port })
-              }}
-              placeholder="3000"
-            />
-          </div>
-          <div className="form-group" style={{ maxWidth: 110, marginBottom: 0 }}>
-            <label>Container port</label>
-            <input
-              className="form-control"
-              type="number"
-              value={fwd.containerPort ?? fwd.remotePort}
-              onChange={(e) => {
-                const port = Number(e.target.value)
-                updateForward(i, { ...fwd, containerPort: port })
-              }}
-              placeholder="3000"
-            />
-          </div>
-          <button className="btn btn-icon" style={{ marginBottom: 2 }} onClick={() => removeForward(i)}>
-            ✕
-          </button>
+      <div className="form-group">
+        <label style={{ flexDirection: 'row', display: 'flex', gap: 6, alignItems: 'center' }}>
+          <input
+            type="checkbox"
+            checked={draft.local ?? false}
+            onChange={(e) => onChange('local', e.target.checked)}
+          />
+          Local machine (no SSH)
+        </label>
+        <div style={{ fontSize: 11, color: 'var(--overlay1)', marginTop: 2 }}>
+          Run Docker commands directly on this machine instead of over SSH.
         </div>
-      ))}
+      </div>
+
+      {draft.local ? (
+        <>
+          <div className="form-section-title" style={{ marginTop: 8 }}>
+            Port Mappings
+            <button className="btn btn-ghost btn-sm" style={{ marginLeft: 8 }} onClick={addLocalPort}>
+              + Add
+            </button>
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{ marginLeft: 4 }}
+              onClick={autoDetectPorts}
+              disabled={detecting}
+              title="Detect EXPOSE ports from container image"
+            >
+              {detecting ? 'Detecting…' : 'Auto-detect'}
+            </button>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--overlay1)', marginBottom: 6 }}>
+            Host port: exposed on the local machine (<code>-p host:container</code>).
+            Container port: the port inside the container.
+          </div>
+          {(draft.container?.ports ?? []).map((port, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginBottom: 6 }}>
+              <div className="form-group" style={{ maxWidth: 110, marginBottom: 0 }}>
+                <label>Host port</label>
+                <input
+                  className="form-control"
+                  type="number"
+                  value={port.hostPort}
+                  onChange={(e) => updateLocalPort(i, Number(e.target.value), port.containerPort)}
+                  placeholder="3000"
+                />
+              </div>
+              <div className="form-group" style={{ maxWidth: 110, marginBottom: 0 }}>
+                <label>Container port</label>
+                <input
+                  className="form-control"
+                  type="number"
+                  value={port.containerPort}
+                  onChange={(e) => updateLocalPort(i, port.hostPort, Number(e.target.value))}
+                  placeholder="3000"
+                />
+              </div>
+              <button className="btn btn-icon" style={{ marginBottom: 2 }} onClick={() => removeLocalPort(i)}>
+                ✕
+              </button>
+            </div>
+          ))}
+        </>
+      ) : (
+        <>
+          <div className="form-section-title" style={{ marginTop: 8 }}>
+            Port Forwards
+            <button className="btn btn-ghost btn-sm" style={{ marginLeft: 8 }} onClick={addForward}>
+              + Add
+            </button>
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{ marginLeft: 4 }}
+              onClick={autoDetectPorts}
+              disabled={detecting}
+              title="Detect EXPOSE ports from container image"
+            >
+              {detecting ? 'Detecting…' : 'Auto-detect'}
+            </button>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--overlay1)', marginBottom: 6 }}>
+            Host port: used as the SSH local/remote port (<code>-L n:localhost:n</code>) and the Docker host port (<code>-p host:container</code>).
+            Container port: the port inside the container.
+          </div>
+          {draft.ssh.forwards.map((fwd, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginBottom: 6 }}>
+              <div className="form-group" style={{ maxWidth: 110, marginBottom: 0 }}>
+                <label>Host port</label>
+                <input
+                  className="form-control"
+                  type="number"
+                  value={fwd.localPort}
+                  onChange={(e) => {
+                    const port = Number(e.target.value)
+                    updateForward(i, { ...fwd, localPort: port, remotePort: port })
+                  }}
+                  placeholder="3000"
+                />
+              </div>
+              <div className="form-group" style={{ maxWidth: 110, marginBottom: 0 }}>
+                <label>Container port</label>
+                <input
+                  className="form-control"
+                  type="number"
+                  value={fwd.containerPort ?? fwd.remotePort}
+                  onChange={(e) => {
+                    const port = Number(e.target.value)
+                    updateForward(i, { ...fwd, containerPort: port })
+                  }}
+                  placeholder="3000"
+                />
+              </div>
+              <button className="btn btn-icon" style={{ marginBottom: 2 }} onClick={() => removeForward(i)}>
+                ✕
+              </button>
+            </div>
+          ))}
+        </>
+      )}
 
       <div className="form-section-title" style={{ marginTop: 8 }}>Terminal</div>
       <div className="form-row">

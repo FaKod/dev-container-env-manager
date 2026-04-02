@@ -125,38 +125,51 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
 
   return (
     <div className="status-panel">
-      {/* SSH Connection */}
-      <div className="status-section status-section-ssh">
-        <div className="status-section-title">
-          <span key={sshIconKey} className="icon-pulse"><Wifi size={11} /></span>
-          SSH Connection
-        </div>
-        <div className="status-row">
-          <span className="status-label">Host</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-            {profile.ssh.host}
-          </span>
-        </div>
-        <div className="status-row">
-          <span className="status-label">Status</span>
-          <ConnectionStatusBadge status={connState?.status ?? 'disconnected'} />
-        </div>
-        {connState?.connectedAt && (
+      {/* SSH Connection — hidden for local profiles */}
+      {profile.local ? (
+        <div className="status-section status-section-ssh">
+          <div className="status-section-title">
+            <span key={sshIconKey} className="icon-pulse"><Wifi size={11} /></span>
+            Local Machine
+          </div>
           <div className="status-row">
-            <span className="status-label">Since</span>
-            <span>{new Date(connState.connectedAt).toLocaleTimeString()}</span>
+            <span className="status-label">Status</span>
+            <ConnectionStatusBadge status={connState?.status ?? 'disconnected'} />
           </div>
-        )}
-        {connState?.error && (
-          <div className="status-row" style={{ color: 'var(--red)' }}>
-            <span className="status-label">Error</span>
-            <span style={{ fontSize: 11 }}>{connState.error}</span>
+        </div>
+      ) : (
+        <div className="status-section status-section-ssh">
+          <div className="status-section-title">
+            <span key={sshIconKey} className="icon-pulse"><Wifi size={11} /></span>
+            SSH Connection
           </div>
-        )}
-      </div>
+          <div className="status-row">
+            <span className="status-label">Host</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+              {profile.ssh.host}
+            </span>
+          </div>
+          <div className="status-row">
+            <span className="status-label">Status</span>
+            <ConnectionStatusBadge status={connState?.status ?? 'disconnected'} />
+          </div>
+          {connState?.connectedAt && (
+            <div className="status-row">
+              <span className="status-label">Since</span>
+              <span>{new Date(connState.connectedAt).toLocaleTimeString()}</span>
+            </div>
+          )}
+          {connState?.error && (
+            <div className="status-row" style={{ color: 'var(--red)' }}>
+              <span className="status-label">Error</span>
+              <span style={{ fontSize: 11 }}>{connState.error}</span>
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* Port Forwards */}
-      {(connState?.portForwards?.length ?? 0) > 0 && (
+      {/* Port Forwards — only for non-local profiles */}
+      {!profile.local && (connState?.portForwards?.length ?? 0) > 0 && (
         <div className="status-section status-section-ports">
           <div className="status-section-title"><Network size={11} /> Port Forwards</div>
           {connState!.portForwards.map((pf, i) => (

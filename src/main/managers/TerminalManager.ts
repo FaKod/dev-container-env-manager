@@ -96,6 +96,39 @@ export class TerminalManager extends EventEmitter {
     profile: Profile,
     context: TerminalContext
   ): Promise<{ command: string; args: string[] }> {
+    // Local profiles run everything on this machine — no SSH wrapper
+    if (profile.local) {
+      if (context === 'local' || context === 'ssh' || !profile.container) {
+        const shell = process.env.SHELL ?? '/bin/bash'
+        return { command: shell, args: [] }
+      }
+
+      const containerName = profile.container.name
+      const mode = profile.container.terminalMode ?? 'smart'
+
+      if (mode === 'attach' || mode === 'smart') {
+        const activeForProfile = Array.from(this.terminals.values()).filter(
+          (e) => e.session.profileId === profile.id && e.session.active
+        ).length
+
+        if (activeForProfile === 0) {
+          return {
+            command: 'docker',
+            args: ['attach', '--sig-proxy=false', '--detach-keys=', containerName]
+          }
+        }
+      }
+
+      let shellArgs: string[]
+      if (profile.container.shell) {
+        shellArgs = profile.container.shell.split(/\s+/).filter(Boolean)
+      } else {
+        shellArgs = await this.detectContainerCmdLocal(profile, containerName)
+      }
+
+      return { command: 'docker', args: ['exec', '-it', containerName, ...shellArgs] }
+    }
+
     const sshTarget = profile.ssh.user
       ? `${profile.ssh.user}@${profile.ssh.host}`
       : profile.ssh.host
@@ -163,6 +196,29 @@ export class TerminalManager extends EventEmitter {
         ...shellArgs
       ]
     }
+  }
+
+  private async detectContainerCmdLocal(
+    profile: Profile,
+    containerName: string
+  ): Promise<string[]> {
+    try {
+      const { stdout } = await execAsync(
+        `docker inspect --format '{{json .Config.Cmd}}' ${containerName}`,
+        { timeout: 8000 }
+      )
+      const raw = stdout.trim()
+      if (raw && raw !== 'null') {
+        const parts: string[] = JSON.parse(raw)
+        if (parts.length > 0) {
+          this.logger.info('TerminalManager', `Detected CMD: ${parts.join(' ')}`, profile.id)
+          return parts
+        }
+      }
+    } catch {
+      // fall back
+    }
+    return ['bash']
   }
 
   private async detectContainerCmd(
