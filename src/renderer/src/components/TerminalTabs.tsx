@@ -54,6 +54,18 @@ export function TerminalTabs(): React.ReactElement {
     }
     await window.api.destroyTerminal(terminalId)
     cleanupTerminalInstance(terminalId)
+
+    // Auto-select a neighbouring tab when closing the active one
+    if (activeTerminalId === terminalId) {
+      const idx = terminals.findIndex((t) => t.id === terminalId)
+      const remaining = terminals.filter((t) => t.id !== terminalId)
+      const next = remaining[idx] ?? remaining[idx - 1]
+      if (next) {
+        setActiveTerminal(next.id)
+        setActiveProfile(next.profileId)
+      }
+    }
+
     removeTerminal(terminalId)
   }
 
