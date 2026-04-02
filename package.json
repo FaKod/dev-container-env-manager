@@ -10,6 +10,7 @@
     "start": "electron-vite dev -- --no-sandbox",
     "preview": "electron . --no-sandbox",
     "dist": "electron-vite build && CC=x86_64-linux-gnu-gcc CXX=x86_64-linux-gnu-g++ LINK=x86_64-linux-gnu-g++ electron-builder --linux AppImage --x64",
+    "dist:mac": "electron-vite build && electron-builder --mac dmg",
     "rebuild": "electron-rebuild -f -w node-pty",
     "postinstall": "electron-rebuild -f -w node-pty"
   },
@@ -40,6 +41,12 @@
         }
       ],
       "category": "Development"
+    },
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] }
+      ],
+      "category": "public.app-category.developer-tools"
     },
     "nativeRebuilder": "legacy"
   },
