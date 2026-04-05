@@ -145,6 +145,9 @@ const api = {
   writeTextFile: (filePath: string, content: string): Promise<void> =>
     ipcRenderer.invoke('fs:writeText', filePath, content),
 
+  openUrl: (url: string): Promise<void> =>
+    ipcRenderer.invoke('shell:openExternal', url),
+
   // ── Event subscriptions (return unsubscribe function) ────────────────────
   onTerminalData: (
     callback: (terminalId: string, data: string) => void

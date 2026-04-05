@@ -27,6 +27,10 @@ export function setupIpcHandlers(opts: SetupOptions): void {
     eventLogManager
   } = opts
 
+  ipcMain.handle('shell:openExternal', (_e, url: string) => {
+    require('electron').shell.openExternal(url)
+  })
+
   // ─── Profiles ──────────────────────────────────────────────────────────────
 
   ipcMain.handle('profile:list', () => profileManager.getAll())

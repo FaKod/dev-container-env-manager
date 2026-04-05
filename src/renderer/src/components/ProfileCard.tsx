@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Pencil, Copy, Trash2 } from 'lucide-react'
+import { Pencil, Copy, Trash2, Globe } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { toast } from './Toast'
 import { showConfirm } from './ConfirmModal'
@@ -84,6 +84,19 @@ export function ProfileCard({ profile }: Props): React.ReactElement {
     }
   }
 
+  async function handleOpenBrowser(): Promise<void> {
+    const port = profile.ssh.forwards[0]?.localPort ?? profile.container?.ports[0]?.hostPort
+    if (port) {
+      try {
+        await window.api.openUrl(`http://localhost:${port}`)
+      } catch (err) {
+        toast(`Failed to open browser: ${err}`)
+      }
+    } else {
+      toast('No ports configured for this profile')
+    }
+  }
+
   function handleSelect(): void {
     setActiveProfile(profile.id)
     // Switch to first terminal of this profile if available
@@ -146,6 +159,14 @@ export function ProfileCard({ profile }: Props): React.ReactElement {
             {busy ? 'Connecting…' : 'Connect'}
           </button>
         )}
+
+        <button
+          className="btn btn-icon"
+          onClick={() => handleOpenBrowser()}
+          title="Open browser"
+        >
+          <Globe size={12} />
+        </button>
 
         <button
           className="btn btn-icon"
