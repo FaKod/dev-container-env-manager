@@ -1,6 +1,6 @@
 {
   "name": "devenv-manager",
-  "version": "1.0.0",
+  "version": "0.0.11",
   "description": "Agentic Dev Environment Manager",
   "author": "FaKods",
   "main": "out/main/index.js",
@@ -9,7 +9,8 @@
     "build": "electron-vite build",
     "start": "electron-vite dev -- --no-sandbox",
     "preview": "electron . --no-sandbox",
-    "dist": "electron-vite build && CC=x86_64-linux-gnu-gcc CXX=x86_64-linux-gnu-g++ LINK=x86_64-linux-gnu-g++ electron-builder --linux AppImage --x64",
+    "dist": "node scripts/bump-version.js && npm run dist:build",
+    "dist:build": "electron-vite build && CC=x86_64-linux-gnu-gcc CXX=x86_64-linux-gnu-g++ LINK=x86_64-linux-gnu-g++ electron-builder --linux AppImage --x64",
     "dist:mac": "electron-vite build && electron-builder --mac dmg",
     "rebuild": "electron-rebuild -f -w node-pty",
     "postinstall": "electron-rebuild -f -w node-pty"
@@ -44,7 +45,13 @@
     },
     "mac": {
       "target": [
-        { "target": "dmg", "arch": ["x64", "arm64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ],
       "category": "public.app-category.developer-tools"
     },
