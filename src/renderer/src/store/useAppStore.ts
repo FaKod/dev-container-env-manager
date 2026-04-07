@@ -81,7 +81,7 @@ export const useAppStore = create<AppStore>((set) => ({
   showProfileEditor: false,
   editingProfileId: null,
   showLogViewer: false,
-  showStatusPanel: true,
+  showStatusPanel: false,
   tileMode: false,
   theme: (localStorage.getItem('theme') as 'dark' | 'light') ?? 'dark',
 
