@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react'
 import { Terminal, Plus, Upload, Download, Sun, Moon, ChevronDown, Pencil, X, FolderPlus } from 'lucide-react'
+import logoImg from '../assets/devenvmanager.png'
 import { useAppStore } from '../store/useAppStore'
 import { ProfileCard } from './ProfileCard'
 import { toast } from './Toast'
@@ -256,7 +257,7 @@ export function Sidebar(): React.ReactElement {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <div className="logo"><Terminal size={14} /></div>
+        <div className="logo"><img src={logoImg} alt="Logo" /></div>
         <h1>DevEnv Manager</h1>
       </div>
 
