@@ -148,6 +148,9 @@ const api = {
   openUrl: (url: string): Promise<void> =>
     ipcRenderer.invoke('shell:openExternal', url),
 
+  getAppVersion: (): Promise<string> =>
+    ipcRenderer.invoke('app:getVersion'),
+
   // ── Event subscriptions (return unsubscribe function) ────────────────────
   onTerminalData: (
     callback: (terminalId: string, data: string) => void

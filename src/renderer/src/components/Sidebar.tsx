@@ -128,6 +128,11 @@ export function Sidebar(): React.ReactElement {
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
+  const [version, setVersion] = useState<string>('')
+
+  useEffect(() => {
+    window.api.getAppVersion().then(setVersion).catch(() => {})
+  }, [])
 
   // Group profiles by project
   const validProjectIds = new Set(projects.map((p) => p.id))
@@ -260,7 +265,10 @@ export function Sidebar(): React.ReactElement {
         <div className="logo">
           <img src={logoImg} alt="Logo" />
         </div>
-        <h1>DevEnv Manager</h1>
+        <div className="sidebar-title-section">
+          <h1>DevEnv Manager</h1>
+          <span className="sidebar-version">{version}</span>
+        </div>
       </div >
 
       <div className="sidebar-actions">

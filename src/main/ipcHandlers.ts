@@ -1,4 +1,4 @@
-import { ipcMain, dialog } from 'electron'
+import { ipcMain, dialog, app } from 'electron'
 import { writeFileSync } from 'fs'
 import type { BrowserWindow } from 'electron'
 import type { ProfileManager } from './managers/ProfileManager'
@@ -30,6 +30,8 @@ export function setupIpcHandlers(opts: SetupOptions): void {
   ipcMain.handle('shell:openExternal', (_e, url: string) => {
     require('electron').shell.openExternal(url)
   })
+
+  ipcMain.handle('app:getVersion', () => app.getVersion())
 
   // ─── Profiles ──────────────────────────────────────────────────────────────
 

@@ -168,6 +168,12 @@ html, body, #root {
   user-select: none;
 }
 
+.sidebar-title-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .sidebar-header h1 {
   font-size: 14px;
   font-weight: 700;
@@ -178,6 +184,13 @@ html, body, #root {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+.sidebar-version {
+  font-size: 10px;
+  color: var(--text1);
+  opacity: 0.6;
+  line-height: 1;
 }
 
 .sidebar-header .logo {
