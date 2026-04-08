@@ -257,9 +257,11 @@ export function Sidebar(): React.ReactElement {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <div className="logo"><img src={logoImg} alt="Logo" /></div>
+        <div className="logo">
+          <img src={logoImg} alt="Logo" />
+        </div>
         <h1>DevEnv Manager</h1>
-      </div>
+      </div >
 
       <div className="sidebar-actions">
         <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={handleNewProfile}>
