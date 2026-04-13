@@ -9,6 +9,9 @@
     "build": "electron-vite build",
     "start": "electron-vite dev -- --no-sandbox",
     "preview": "electron . --no-sandbox",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "lint": "eslint src/",
+    "format": "prettier --write src/",
     "dist": "node scripts/bump-version.js && npm run dist:build",
     "dist:build": "electron-vite build && CC=x86_64-linux-gnu-gcc CXX=x86_64-linux-gnu-g++ LINK=x86_64-linux-gnu-g++ electron-builder --linux AppImage --x64",
     "dist:mac": "electron-vite build && electron-builder --mac dmg",
@@ -22,13 +25,6 @@
       "buildResources": "build",
       "output": "dist"
     },
-    "files": [
-      "out/**/*",
-      "node_modules/**/*",
-      "!node_modules/electron/**/*",
-      "!node_modules/electron-builder/**/*",
-      "!node_modules/.cache/**/*"
-    ],
     "extraMetadata": {
       "main": "out/main/index.js"
     },
