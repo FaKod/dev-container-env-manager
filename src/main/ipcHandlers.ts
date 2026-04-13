@@ -1,4 +1,4 @@
-import { ipcMain, dialog, app } from 'electron'
+import { ipcMain, dialog, app, shell } from 'electron'
 import { writeFileSync } from 'fs'
 import type { BrowserWindow } from 'electron'
 import type { ProfileManager } from './managers/ProfileManager'
@@ -6,7 +6,7 @@ import type { ConnectionManager } from './managers/ConnectionManager'
 import type { TerminalManager } from './managers/TerminalManager'
 import type { ContainerManager } from './managers/ContainerManager'
 import type { EventLogManager } from './managers/EventLogManager'
-import type { TerminalContext } from '../shared/types'
+import type { TerminalContext, Profile } from '../shared/types'
 
 interface SetupOptions {
   mainWindow: BrowserWindow
@@ -28,7 +28,8 @@ export function setupIpcHandlers(opts: SetupOptions): void {
   } = opts
 
   ipcMain.handle('shell:openExternal', (_e, url: string) => {
-    require('electron').shell.openExternal(url)
+    if (!url.startsWith('https://') && !url.startsWith('http://')) return
+    shell.openExternal(url)
   })
 
   ipcMain.handle('app:getVersion', () => app.getVersion())
@@ -37,14 +38,16 @@ export function setupIpcHandlers(opts: SetupOptions): void {
 
   ipcMain.handle('profile:list', () => profileManager.getAll())
 
-  ipcMain.handle('profile:create', (_e, data) => profileManager.create(data))
+  ipcMain.handle('profile:create', (_e, data: Partial<Omit<Profile, 'id' | 'createdAt' | 'updatedAt'>>) => profileManager.create(data))
 
-  ipcMain.handle('profile:update', (_e, id: string, updates) =>
+  ipcMain.handle('profile:update', (_e, id: string, updates: Partial<Omit<Profile, 'id' | 'createdAt'>>) =>
     profileManager.update(id, updates)
   )
 
   ipcMain.handle('profile:delete', (_e, id: string) => {
-    connectionManager.disconnect(id).catch(() => {})
+    connectionManager.disconnect(id).catch((err) => {
+      eventLogManager.warn('IpcHandlers', `Disconnect failed during profile delete: ${err}`, id)
+    })
     terminalManager.destroyForProfile(id)
     profileManager.delete(id)
   })
@@ -197,7 +200,9 @@ export function setupIpcHandlers(opts: SetupOptions): void {
         }
         // 'leave' → do nothing
       }
-    } catch { /* ignore errors on disconnect */ }
+    } catch (err) {
+      eventLogManager.warn('IpcHandlers', `applyDisconnectBehavior failed: ${err}`, profileId)
+    }
   }
 
   ipcMain.handle('connection:disconnect', async (_e, profileId: string) => {

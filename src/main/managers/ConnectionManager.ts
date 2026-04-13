@@ -277,7 +277,7 @@ export class ConnectionManager extends EventEmitter {
     )
 
     entry.reconnectTimer = setTimeout(async () => {
-      if (entry.mainWindow) {
+      if (entry.mainWindow && !entry.mainWindow.isDestroyed()) {
         await this.spawnSSHTunnel(profile, entry)
       }
     }, delay)

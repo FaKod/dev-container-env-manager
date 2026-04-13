@@ -250,7 +250,7 @@ export class ContainerManager {
     if (!profile.container) return ''
     const name = profile.container.name
     try {
-      return await this.sshExec(profile, `docker logs --tail ${lines} ${name} 2>&1`)
+      return await this.exec(profile, `docker logs --tail ${lines} ${name} 2>&1`)
     } catch (err) {
       return `Error fetching logs: ${err}`
     }
