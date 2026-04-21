@@ -779,10 +779,10 @@ function PolicyTab({ draft, onChange }: TabProps): React.ReactElement {
         </select>
       </div>
       <div className="form-group">
-        <label>On Disconnect</label>
+        <label>On App Close</label>
         <select
           className="form-control"
-          value={p.onDisconnectBehavior ?? 'stop'}
+          value={p.onDisconnectBehavior ?? 'leave'}
           onChange={(e) =>
             updatePolicy(
               'onDisconnectBehavior',
@@ -790,9 +790,9 @@ function PolicyTab({ draft, onChange }: TabProps): React.ReactElement {
             )
           }
         >
+          <option value="leave">Leave running</option>
           <option value="stop">Stop container</option>
           <option value="pause">Pause container</option>
-          <option value="leave">Leave running</option>
         </select>
       </div>
     </div>

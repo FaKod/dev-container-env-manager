@@ -171,47 +171,8 @@ export function setupIpcHandlers(opts: SetupOptions): void {
     await connectionManager.connect(profile, mainWindow)
   })
 
-  // Shared helper: apply onDisconnectBehavior policy to a profile's container
-  async function applyDisconnectBehavior(profileId: string): Promise<void> {
-    const profile = profileManager.getById(profileId)
-    if (!profile?.container) return
-    const behavior = profile.connectionPolicy.onDisconnectBehavior ?? 'stop'
-    try {
-      const state = await containerManager.getStatus(profile)
-      if (state.status === 'running') {
-        if (behavior === 'stop') {
-          await containerManager.stop(profile)
-          try {
-            if (!mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('container:stateChanged', profileId, {
-                profileId, status: 'stopped', containerName: profile.container.name
-              })
-            }
-          } catch { /* window destroyed */ }
-        } else if (behavior === 'pause') {
-          await containerManager.pause(profile)
-          try {
-            if (!mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('container:stateChanged', profileId, {
-                profileId, status: 'paused', containerName: profile.container.name
-              })
-            }
-          } catch { /* window destroyed */ }
-        }
-        // 'leave' → do nothing
-      }
-    } catch (err) {
-      eventLogManager.warn('IpcHandlers', `applyDisconnectBehavior failed: ${err}`, profileId)
-    }
-  }
-
   ipcMain.handle('connection:disconnect', async (_e, profileId: string) => {
-    const profile = profileManager.getById(profileId)
-    const behavior = profile?.connectionPolicy.onDisconnectBehavior ?? 'stop'
-    // Hard-kill PTYs (no exit\n) when pausing so the buffered command
-    // doesn't reach the shell when the container is later unpaused
-    terminalManager.destroyForProfile(profileId, behavior === 'pause')
-    await applyDisconnectBehavior(profileId)
+    terminalManager.destroyForProfile(profileId, true)
     await connectionManager.disconnect(profileId)
   })
 
@@ -386,7 +347,6 @@ export function setupIpcHandlers(opts: SetupOptions): void {
   terminalManager.on('profileTerminalsEmpty', async (profileId: string) => {
     const connState = connectionManager.getState(profileId)
     if (!connState || connState.status === 'disconnected') return
-    await applyDisconnectBehavior(profileId)
     await connectionManager.disconnect(profileId)
   })
 

@@ -54,6 +54,7 @@ export interface ConnectionPolicy {
   autoConnectOnStart?: boolean
   preventDuplicateConnections?: boolean
   existingContainerBehavior?: 'attach' | 'start' | 'recreate' | 'ask' | 'attach-or-recreate'
+  /** Applies only when the app window closes, not on manual disconnect */
   onDisconnectBehavior?: 'stop' | 'pause' | 'leave'
   reconnectDelay?: number
   maxReconnectAttempts?: number

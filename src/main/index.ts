@@ -83,7 +83,7 @@ app.on('window-all-closed', async () => {
       const conn = connectionManager.getState(profile.id)
       if (!conn || conn.status === 'disconnected') return
       if (!profile.container) return
-      const behavior = profile.connectionPolicy.onDisconnectBehavior ?? 'stop'
+      const behavior = profile.connectionPolicy.onDisconnectBehavior ?? 'leave'
       try {
         const state = await containerManager.getStatus(profile)
         if (state.status === 'running') {
