@@ -84,7 +84,9 @@ function createXterm(
 
   const fitAddon = new FitAddon()
   const searchAddon = new SearchAddon()
-  const webLinksAddon = new WebLinksAddon()
+  const webLinksAddon = new WebLinksAddon((_event: MouseEvent, uri: string) => {
+    window.api.openUrl(uri)
+  })
 
   xterm.loadAddon(fitAddon)
   xterm.loadAddon(searchAddon)
