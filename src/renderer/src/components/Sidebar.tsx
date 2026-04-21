@@ -124,7 +124,12 @@ export function Sidebar(): React.ReactElement {
   } = useAppStore()
 
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('collapsedProjects')
+      return stored ? new Set(JSON.parse(stored)) : new Set()
+    } catch { return new Set() }
+  })
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
@@ -147,6 +152,7 @@ export function Sidebar(): React.ReactElement {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
+      localStorage.setItem('collapsedProjects', JSON.stringify([...next]))
       return next
     })
   }
