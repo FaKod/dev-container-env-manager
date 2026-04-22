@@ -74,7 +74,7 @@ function createXterm(
 ): { xterm: Terminal; fitAddon: FitAddon; searchAddon: SearchAddon } {
   const mode = (document.documentElement.dataset.theme as 'dark' | 'light') ?? 'dark'
   const xterm = new Terminal({
-    cursorBlink: true,
+    cursorBlink: false,
     fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
     fontSize: terminalFontSize,
     lineHeight: 1.4,
