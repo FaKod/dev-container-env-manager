@@ -71,6 +71,7 @@ export class TerminalManager extends EventEmitter {
     }
 
     ptyProcess.onData((data) => {
+      if (!this.terminals.has(id)) return
       safeSend('terminal:data', id, data)
     })
 
