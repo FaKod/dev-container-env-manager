@@ -6,6 +6,12 @@ import type { Profile, PortForward } from '../../../shared/types'
 
 type DraftProfile = Omit<Profile, 'id' | 'createdAt' | 'updatedAt'>
 
+const PROFILE_COLORS = [
+  '--blue', '--mauve', '--teal', '--peach', '--green', '--sapphire',
+  '--pink', '--lavender', '--yellow', '--red', '--rosewater', '--flamingo',
+  '--electric', '--magenta', '--lime', '--amber'
+]
+
 function toContainerName(s: string): string {
   return s.trim().replace(/[^a-zA-Z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '') || 'container'
 }
@@ -13,6 +19,7 @@ function toContainerName(s: string): string {
 function emptyDraft(): DraftProfile {
   return {
     name: '',
+    color: undefined,
     local: false,
     ssh: {
       host: '',
@@ -50,6 +57,7 @@ function emptyDraft(): DraftProfile {
 function profileToDraft(p: Profile): DraftProfile {
   return {
     name: p.name,
+    color: p.color,
     local: p.local ?? false,
     ssh: { ...p.ssh, forwards: [...(p.ssh.forwards ?? [])] },
     terminal: { ...p.terminal },
@@ -319,6 +327,35 @@ function GeneralTab({ draft, onChange, firstInputRef }: TabProps): React.ReactEl
           placeholder="e.g. aiact-anthropic"
         />
       </div>
+      <div className="form-group">
+        <label>Color</label>
+        <div className="color-swatch-grid">
+          <button
+            className={`color-swatch${draft.color === undefined ? ' selected' : ''}`}
+            onClick={() => onChange('color', undefined)}
+            title="Auto"
+            style={{
+              border: '2px dashed var(--overlay0)',
+              background: 'transparent',
+              color: 'var(--overlay0)',
+              fontSize: 10,
+              fontWeight: 600
+            }}
+          >
+            A
+          </button>
+          {PROFILE_COLORS.map((c) => (
+            <button
+              key={c}
+              className={`color-swatch${draft.color === c ? ' selected' : ''}`}
+              onClick={() => onChange('color', c)}
+              title={c.replace('--', '')}
+              style={{ background: `var(${c})` }}
+            />
+          ))}
+        </div>
+      </div>
+
       <div className="form-group">
         <label style={{ flexDirection: 'row', display: 'flex', gap: 6, alignItems: 'center' }}>
           <input

@@ -106,7 +106,7 @@ export function ProfileCard({ profile }: Props): React.ReactElement {
     }
   }
 
-  const avatarColor = AVATAR_COLORS[profile.name.charCodeAt(0) % AVATAR_COLORS.length]
+  const avatarColor = profile.color ?? AVATAR_COLORS[profile.name.charCodeAt(0) % AVATAR_COLORS.length]
 
   return (
     <div

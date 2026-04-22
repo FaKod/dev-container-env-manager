@@ -79,6 +79,7 @@ export interface Project {
 export interface Profile {
   id: string
   name: string
+  color?: string
   local?: boolean
   ssh: SSHConfig
   container?: ContainerConfig

@@ -46,6 +46,10 @@
   --pink:    #f5c2e7;
   --flamingo:#f2cdcd;
   --rosewater:#f5e0dc;
+  --electric: #00ffff;
+  --magenta:  #ff00aa;
+  --lime:     #ccff00;
+  --amber:    #ffaa00;
 
   --sidebar-width: 280px;
   --bottom-panel-height: 200px;
@@ -94,6 +98,10 @@
   --pink:    #ea76cb;
   --flamingo:#dd7878;
   --rosewater:#dc8a78;
+  --electric: #00e5ff;
+  --magenta:  #ff0090;
+  --lime:     #aaff00;
+  --amber:    #ff9500;
 }
 
 html, body, #root {
@@ -1133,6 +1141,29 @@ select.form-control {
 }
 
 input[type="checkbox"] { accent-color: var(--blue); }
+
+/* ── Color swatch grid ────────────────────────────────────────────────────── */
+.color-swatch-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.color-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.1s;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.color-swatch:hover { transform: scale(1.18); }
+.color-swatch.selected { box-shadow: 0 0 0 2px var(--base), 0 0 0 4px var(--text); }
 
 /* ── Port forward rows ─────────────────────────────────────────────────────── */
 .port-row {
