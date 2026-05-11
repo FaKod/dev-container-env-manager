@@ -141,8 +141,11 @@ export function TerminalTabs(): React.ReactElement {
           onClick={() => handleTabClick(t.id, t.profileId)}
           title={t.title}
         >
-          <span className={`terminal-tab-context tab-ctx-${t.context}`}>
-            {t.context}
+          <span
+            className={`terminal-tab-context tab-ctx-${t.context}`}
+            title={t.context}
+          >
+            {t.context === 'container' ? 'c' : t.context}
           </span>
           {isPrimary && (
             <Anchor size={10} style={{ flexShrink: 0, opacity: 0.6 }} title="Primary terminal — closing this will stop the container" />

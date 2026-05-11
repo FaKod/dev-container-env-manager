@@ -440,7 +440,12 @@ function TileGrid(): React.ReactElement {
                     style={{ flex: `${(rows[rowIdx] ?? 1) / totalRowFr} 0 0` }}
                   >
                     <div className="terminal-tile-header">
-                      <span className={`terminal-tile-ctx tab-ctx-${session.context}`}>{session.context}</span>
+                      <span
+                        className={`terminal-tile-ctx tab-ctx-${session.context}`}
+                        title={session.context}
+                      >
+                        {session.context === 'container' ? 'c' : session.context}
+                      </span>
                       <span className="terminal-tile-title">{session.title}</span>
                     </div>
                     <div className="terminal-tile-body">
