@@ -3,7 +3,7 @@ import { exec } from 'child_process'
 import { promisify } from 'util'
 import * as pty from 'node-pty'
 import { v4 as uuidv4 } from 'uuid'
-import type { BrowserWindow } from 'electron'
+import { BrowserWindow } from 'electron'
 import type { Profile, TerminalContext, TerminalSession } from '../../shared/types'
 import type { EventLogManager } from './EventLogManager'
 
@@ -12,7 +12,9 @@ const execAsync = promisify(exec)
 interface TerminalEntry {
   session: TerminalSession
   pty: pty.IPty
-  mainWindow: BrowserWindow
+  // Window that currently receives this terminal's data/exit events.
+  // Swapped by setTargetWindow when a terminal is detached/attached.
+  targetWindow: BrowserWindow
 }
 
 export class TerminalManager extends EventEmitter {
@@ -57,16 +59,31 @@ export class TerminalManager extends EventEmitter {
       active: true
     }
 
-    const entry: TerminalEntry = { session, pty: ptyProcess, mainWindow }
+    const entry: TerminalEntry = { session, pty: ptyProcess, targetWindow: mainWindow }
     this.terminals.set(id, entry)
 
     const safeSend = (channel: string, ...args: unknown[]): void => {
+      // Read target window per-call so detach/attach retargeting takes effect
+      // immediately for any in-flight or future PTY output.
+      const win = this.terminals.get(id)?.targetWindow
+      if (!win) return
       try {
-        if (!mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(channel, ...args)
+        if (!win.isDestroyed()) {
+          win.webContents.send(channel, ...args)
         }
       } catch {
         // window was destroyed between check and send — ignore
+      }
+    }
+
+    // Exit events must reach every window: while the terminal is detached, the
+    // main window otherwise wouldn't learn that the PTY died and would still
+    // show the tab as active after re-attaching.
+    const broadcastSend = (channel: string, ...args: unknown[]): void => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        try {
+          if (!win.isDestroyed()) win.webContents.send(channel, ...args)
+        } catch { /* destroyed mid-iteration */ }
       }
     }
 
@@ -84,7 +101,7 @@ export class TerminalManager extends EventEmitter {
       const e = this.terminals.get(id)
       if (e) {
         e.session.active = false
-        safeSend('terminal:exited', id)
+        broadcastSend('terminal:exited', id)
         this.checkAutoDisconnect(e.session.profileId)
       }
     })
@@ -286,12 +303,13 @@ export class TerminalManager extends EventEmitter {
     this.terminals.delete(terminalId)
     this.logger.info('TerminalManager', `Destroyed terminal ${terminalId}`)
 
-    // Notify the renderer immediately so it can update UI
-    try {
-      if (!entry.mainWindow.isDestroyed()) {
-        entry.mainWindow.webContents.send('terminal:exited', terminalId)
-      }
-    } catch { /* window destroyed */ }
+    // Notify every renderer immediately so it can update UI — both the
+    // detached host (if any) and the main window need to know.
+    for (const win of BrowserWindow.getAllWindows()) {
+      try {
+        if (!win.isDestroyed()) win.webContents.send('terminal:exited', terminalId)
+      } catch { /* window destroyed */ }
+    }
 
     if (!hard) {
       // Send 'exit' so the remote shell (and docker exec) exits cleanly
@@ -332,5 +350,16 @@ export class TerminalManager extends EventEmitter {
 
   getSession(terminalId: string): TerminalSession | undefined {
     return this.terminals.get(terminalId)?.session
+  }
+
+  /**
+   * Route a terminal's data/exit events to a different BrowserWindow.
+   * Used when detaching a terminal into its own window or re-attaching it
+   * to the main window.
+   */
+  setTargetWindow(terminalId: string, win: BrowserWindow): void {
+    const entry = this.terminals.get(terminalId)
+    if (!entry) return
+    entry.targetWindow = win
   }
 }

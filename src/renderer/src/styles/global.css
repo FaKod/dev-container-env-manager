@@ -815,6 +815,43 @@ html, body, #root {
 }
 .terminal-wrapper.visible { display: block; }
 
+/* ── Detached terminal window ──────────────────────────────────────────────── */
+.detached-terminal-window {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  background: var(--base);
+  color: var(--text);
+}
+.detached-terminal-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--mantle);
+  border-bottom: 1px solid var(--surface1);
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+.detached-terminal-toolbar .btn,
+.detached-terminal-toolbar .terminal-tab-context {
+  -webkit-app-region: no-drag;
+}
+.detached-terminal-title {
+  font-size: 12px;
+  color: var(--subtext0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.detached-terminal-body {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+.detached-terminal-body .terminal-wrapper { display: block; }
+
 .xterm { height: 100% !important; }
 .xterm-viewport { overflow-y: scroll !important; }
 

@@ -15,6 +15,7 @@ interface SetupOptions {
   terminalManager: TerminalManager
   containerManager: ContainerManager
   eventLogManager: EventLogManager
+  createDetachedTerminalWindow: (terminalId: string) => BrowserWindow
 }
 
 export function setupIpcHandlers(opts: SetupOptions): void {
@@ -24,8 +25,16 @@ export function setupIpcHandlers(opts: SetupOptions): void {
     connectionManager,
     terminalManager,
     containerManager,
-    eventLogManager
+    eventLogManager,
+    createDetachedTerminalWindow
   } = opts
+
+  // Detached terminal windows, keyed by terminalId. A terminal is in this map
+  // exactly while it lives in its own free-floating window.
+  const detachedWindows = new Map<string, BrowserWindow>()
+  // Marker set so we can distinguish a user-driven close (auto re-attach) from
+  // the close we trigger ourselves after an explicit attach IPC.
+  const closingAfterAttach = new Set<string>()
 
   ipcMain.handle('shell:openExternal', (_e, url: string) => {
     if (!url.startsWith('https://') && !url.startsWith('http://')) return
@@ -206,6 +215,73 @@ export function setupIpcHandlers(opts: SetupOptions): void {
   })
 
   ipcMain.handle('terminal:sessions', () => terminalManager.getSessions())
+
+  // ─── Detached terminals ────────────────────────────────────────────────────
+
+  ipcMain.handle('terminal:detach', async (_e, terminalId: string) => {
+    if (detachedWindows.has(terminalId)) return
+    const session = terminalManager.getSession(terminalId)
+    if (!session) throw new Error(`Terminal ${terminalId} not found`)
+
+    const win = createDetachedTerminalWindow(terminalId)
+    detachedWindows.set(terminalId, win)
+
+    // Wait for the window's renderer to be ready before retargeting PTY data —
+    // otherwise the first chunk of output goes nowhere (no listener yet).
+    await new Promise<void>((resolve) => {
+      if (win.webContents.isLoading()) {
+        win.webContents.once('did-finish-load', () => resolve())
+      } else {
+        resolve()
+      }
+    })
+
+    terminalManager.setTargetWindow(terminalId, win)
+
+    // Tell the main window to drop its xterm instance + hide the tab.
+    try {
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('terminal:detached', terminalId)
+      }
+    } catch { /* destroyed */ }
+
+    // If the user closes the detached window directly (without clicking
+    // Attach), re-attach the terminal to the main window — less destructive.
+    win.on('closed', () => {
+      detachedWindows.delete(terminalId)
+      if (closingAfterAttach.delete(terminalId)) return
+      if (!terminalManager.getSession(terminalId)) return // already destroyed
+      terminalManager.setTargetWindow(terminalId, mainWindow)
+      try {
+        if (!mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('terminal:attached', terminalId)
+        }
+      } catch { /* destroyed */ }
+    })
+
+    eventLogManager.info('IpcHandlers', `Detached terminal ${terminalId}`, session.profileId)
+  })
+
+  ipcMain.handle('terminal:attach', (_e, terminalId: string) => {
+    const win = detachedWindows.get(terminalId)
+    if (!win) return
+
+    terminalManager.setTargetWindow(terminalId, mainWindow)
+
+    // Tell the main window to show the tab again before we close the detached
+    // window — the new xterm instance can start receiving data immediately.
+    try {
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('terminal:attached', terminalId)
+      }
+    } catch { /* destroyed */ }
+
+    closingAfterAttach.add(terminalId)
+    if (!win.isDestroyed()) win.close()
+
+    const session = terminalManager.getSession(terminalId)
+    eventLogManager.info('IpcHandlers', `Attached terminal ${terminalId}`, session?.profileId)
+  })
 
   // ─── Containers ────────────────────────────────────────────────────────────
 

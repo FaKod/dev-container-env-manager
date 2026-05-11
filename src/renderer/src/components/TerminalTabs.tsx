@@ -1,5 +1,5 @@
 import React from 'react'
-import { SplitSquareHorizontal, SplitSquareVertical, Plus, X, LayoutGrid, Rows3, Anchor } from 'lucide-react'
+import { SplitSquareHorizontal, SplitSquareVertical, Plus, X, LayoutGrid, Rows3, Anchor, ExternalLink } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { cleanupTerminalInstance } from './TerminalView'
 import { toast } from './Toast'
@@ -10,6 +10,7 @@ export function TerminalTabs(): React.ReactElement {
     terminals,
     activeTerminalId,
     splits,
+    detachedTerminalIds,
     activeProfileId,
     profiles,
     connections,
@@ -24,6 +25,8 @@ export function TerminalTabs(): React.ReactElement {
     setSplitSession,
     removeSplit
   } = useAppStore()
+
+  const visibleTerminals = terminals.filter((t) => !detachedTerminalIds[t.id])
 
   const activeSplit = activeTerminalId ? splits[activeTerminalId] : undefined
 
@@ -57,8 +60,8 @@ export function TerminalTabs(): React.ReactElement {
 
     // Auto-select a neighbouring tab when closing the active one
     if (activeTerminalId === terminalId) {
-      const idx = terminals.findIndex((t) => t.id === terminalId)
-      const remaining = terminals.filter((t) => t.id !== terminalId)
+      const idx = visibleTerminals.findIndex((t) => t.id === terminalId)
+      const remaining = visibleTerminals.filter((t) => t.id !== terminalId)
       const next = remaining[idx] ?? remaining[idx - 1]
       if (next) {
         setActiveTerminal(next.id)
@@ -67,6 +70,25 @@ export function TerminalTabs(): React.ReactElement {
     }
 
     removeTerminal(terminalId)
+  }
+
+  async function handleDetachTab(
+    e: React.MouseEvent,
+    terminalId: string
+  ): Promise<void> {
+    e.stopPropagation()
+    // If this terminal owns a split view, promote its companion to a regular
+    // tab so it doesn't disappear when the primary leaves the main window.
+    const split = splits[terminalId]
+    if (split) {
+      addTerminal(split.session)
+      removeSplit(terminalId)
+    }
+    try {
+      await window.api.detachTerminal(terminalId)
+    } catch (err) {
+      toast(`Failed to detach terminal: ${err}`)
+    }
   }
 
   async function handleSplit(direction: 'vertical' | 'horizontal'): Promise<void> {
@@ -106,7 +128,7 @@ export function TerminalTabs(): React.ReactElement {
 
   return (
     <div className="terminal-tabs">
-      {!tileMode && terminals.map((t) => {
+      {!tileMode && visibleTerminals.map((t) => {
         const profile = profiles.find(p => p.id === t.profileId)
         const isPrimary =
           !!profile?.container &&
@@ -130,6 +152,13 @@ export function TerminalTabs(): React.ReactElement {
           <button
             className="btn btn-icon"
             style={{ marginLeft: 4 }}
+            onClick={(e) => handleDetachTab(e, t.id)}
+            title="Detach into its own window"
+          >
+            <ExternalLink size={11} />
+          </button>
+          <button
+            className="btn btn-icon"
             onClick={(e) => handleCloseTab(e, t.id)}
             title="Close terminal"
           >

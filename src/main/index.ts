@@ -19,6 +19,50 @@ const containerManager = new ContainerManager(eventLogManager)
 
 let mainWindow: BrowserWindow | null = null
 
+// Renderer URL is loaded with an optional query string so the same bundle can
+// render either the full app or a single detached terminal.
+function loadRenderer(win: BrowserWindow, query?: string): void {
+  if (process.env['ELECTRON_RENDERER_URL']) {
+    const base = process.env['ELECTRON_RENDERER_URL']
+    win.loadURL(query ? `${base}/?${query}` : base)
+  } else {
+    const opts = query ? { search: query } : undefined
+    win.loadFile(join(__dirname, '../renderer/index.html'), opts)
+  }
+}
+
+/**
+ * Spawn a separate, free-floating BrowserWindow that hosts a single terminal.
+ * The window's renderer is given the terminal id via the `?detached=<id>`
+ * query string so it can mount the DetachedTerminalApp shell.
+ */
+export function createDetachedTerminalWindow(terminalId: string): BrowserWindow {
+  const win = new BrowserWindow({
+    width: 900,
+    height: 600,
+    minWidth: 480,
+    minHeight: 320,
+    show: false,
+    backgroundColor: '#1e1e2e',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
+
+  win.on('ready-to-show', () => win.show())
+
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url)
+    return { action: 'deny' }
+  })
+
+  loadRenderer(win, `detached=${encodeURIComponent(terminalId)}`)
+  return win
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -44,11 +88,7 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
-  if (process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-  }
+  loadRenderer(mainWindow)
 
   setupIpcHandlers({
     mainWindow,
@@ -56,7 +96,8 @@ function createWindow(): void {
     connectionManager,
     terminalManager,
     containerManager,
-    eventLogManager
+    eventLogManager,
+    createDetachedTerminalWindow
   })
 
   eventLogManager.info('App', 'FaKods Legendary DevContainer Manager started')

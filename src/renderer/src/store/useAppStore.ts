@@ -21,6 +21,10 @@ interface AppStore {
   activeProfileId: string | null
   activeTerminalId: string | null
   splits: Record<string, { session: TerminalSession; direction: 'vertical' | 'horizontal' }>
+  // Terminal IDs currently displayed in their own detached BrowserWindow.
+  // They stay in `terminals[]` so re-attaching can find them again, but are
+  // hidden from tabs/splits/tiles in the main window.
+  detachedTerminalIds: Record<string, true>
   showProfileEditor: boolean
   editingProfileId: string | null
   showLogViewer: boolean
@@ -57,6 +61,7 @@ interface AppStore {
   setActiveTerminal: (id: string | null) => void
   setSplitSession: (primaryId: string, session: TerminalSession, direction: 'vertical' | 'horizontal') => void
   removeSplit: (primaryId: string) => void
+  setTerminalDetached: (id: string, detached: boolean) => void
   openProfileEditor: (profileId?: string) => void
   closeProfileEditor: () => void
   toggleLogViewer: () => void
@@ -78,6 +83,7 @@ export const useAppStore = create<AppStore>((set) => ({
   activeProfileId: null,
   activeTerminalId: null,
   splits: {},
+  detachedTerminalIds: {},
   showProfileEditor: false,
   editingProfileId: null,
   showLogViewer: false,
@@ -138,12 +144,15 @@ export const useAppStore = create<AppStore>((set) => ({
 
   removeTerminal: (id) =>
     set((s) => {
-      const next = { ...s.splits }
-      delete next[id]
+      const nextSplits = { ...s.splits }
+      delete nextSplits[id]
+      const nextDetached = { ...s.detachedTerminalIds }
+      delete nextDetached[id]
       return {
         terminals: s.terminals.filter((t) => t.id !== id),
         activeTerminalId: s.activeTerminalId === id ? null : s.activeTerminalId,
-        splits: next
+        splits: nextSplits,
+        detachedTerminalIds: nextDetached
       }
     }),
 
@@ -187,6 +196,14 @@ export const useAppStore = create<AppStore>((set) => ({
       const next = { ...s.splits }
       delete next[primaryId]
       return { splits: next }
+    }),
+
+  setTerminalDetached: (id, detached) =>
+    set((s) => {
+      const next = { ...s.detachedTerminalIds }
+      if (detached) next[id] = true
+      else delete next[id]
+      return { detachedTerminalIds: next }
     }),
 
   openProfileEditor: (profileId) =>

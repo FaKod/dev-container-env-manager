@@ -3,7 +3,7 @@ import { ScrollText, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react'
 import { useAppStore } from './store/useAppStore'
 import { Sidebar } from './components/Sidebar'
 import { TerminalTabs } from './components/TerminalTabs'
-import { TerminalView, increaseFontSize, decreaseFontSize, resetFontSize } from './components/TerminalView'
+import { TerminalView, increaseFontSize, decreaseFontSize, resetFontSize, cleanupTerminalInstance } from './components/TerminalView'
 import { StatusPanel } from './components/StatusPanel'
 import { LogViewer } from './components/LogViewer'
 import { ProfileEditor } from './components/ProfileEditor'
@@ -25,7 +25,8 @@ export default function App(): React.ReactElement {
     addLog,
     addTerminal,
     setActiveTerminal,
-    setActiveProfile
+    setActiveProfile,
+    setTerminalDetached
   } = useAppStore()
 
   const { size: sidebarWidth, handleMouseDown: sidebarMouseDown } = useResizablePane(280, 180, 480, 'horizontal')
@@ -64,6 +65,31 @@ export default function App(): React.ReactElement {
       }),
       window.api.onLogEntry((entry) => {
         addLog(entry)
+      }),
+      window.api.onTerminalDetached((terminalId) => {
+        // Drop our local xterm so the detached window can render fresh, then
+        // hide the tab. If it was active, fall back to another visible tab.
+        cleanupTerminalInstance(terminalId)
+        setTerminalDetached(terminalId, true)
+        const s = useAppStore.getState()
+        if (s.splits[terminalId]) s.removeSplit(terminalId)
+        if (s.activeTerminalId === terminalId) {
+          const next = s.terminals.find(
+            (t) => t.id !== terminalId && !s.detachedTerminalIds[t.id]
+          )
+          setActiveTerminal(next?.id ?? null)
+          if (next) setActiveProfile(next.profileId)
+        }
+      }),
+      window.api.onTerminalAttached((terminalId) => {
+        // The tab reappears; TerminalPane re-mounts and builds a fresh xterm.
+        setTerminalDetached(terminalId, false)
+        const s = useAppStore.getState()
+        if (s.terminals.some((t) => t.id === terminalId)) {
+          setActiveTerminal(terminalId)
+          const session = s.terminals.find((t) => t.id === terminalId)
+          if (session) setActiveProfile(session.profileId)
+        }
       })
     ]
     return () => unsubs.forEach((u) => u())

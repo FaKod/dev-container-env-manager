@@ -91,6 +91,12 @@ const api = {
   getTerminalSessions: (): Promise<TerminalSession[]> =>
     ipcRenderer.invoke('terminal:sessions'),
 
+  detachTerminal: (terminalId: string): Promise<void> =>
+    ipcRenderer.invoke('terminal:detach', terminalId),
+
+  attachTerminal: (terminalId: string): Promise<void> =>
+    ipcRenderer.invoke('terminal:attach', terminalId),
+
   // ── Containers ────────────────────────────────────────────────────────────
   getContainerStatus: (profileId: string): Promise<ContainerState> =>
     ipcRenderer.invoke('container:status', profileId),
@@ -166,6 +172,20 @@ const api = {
       callback(terminalId)
     ipcRenderer.on('terminal:exited', handler)
     return () => ipcRenderer.removeListener('terminal:exited', handler)
+  },
+
+  onTerminalDetached: (callback: (terminalId: string) => void): (() => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, terminalId: string) =>
+      callback(terminalId)
+    ipcRenderer.on('terminal:detached', handler)
+    return () => ipcRenderer.removeListener('terminal:detached', handler)
+  },
+
+  onTerminalAttached: (callback: (terminalId: string) => void): (() => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, terminalId: string) =>
+      callback(terminalId)
+    ipcRenderer.on('terminal:attached', handler)
+    return () => ipcRenderer.removeListener('terminal:attached', handler)
   },
 
   onConnectionStateChanged: (

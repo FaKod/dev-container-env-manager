@@ -1,6 +1,6 @@
 {
   "name": "devenv-manager",
-  "version": "0.0.40",
+  "version": "0.0.41",
   "description": "Agentic Dev Environment Manager",
   "author": "FaKods",
   "main": "out/main/index.js",

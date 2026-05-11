@@ -174,7 +174,7 @@ interface TerminalPaneProps {
   visible: boolean
 }
 
-function TerminalPane({ session, visible }: TerminalPaneProps): React.ReactElement {
+export function TerminalPane({ session, visible }: TerminalPaneProps): React.ReactElement {
   const { markTerminalInactive, markTerminalUnread, markTerminalRead, setTerminalTitle } = useAppStore()
   const profileName = useAppStore((s) => s.profiles.find((p) => p.id === session.profileId)?.name ?? '')
   const containerRef = useRef<HTMLDivElement>(null)
@@ -332,7 +332,9 @@ function fitAll(ids: string[]): void {
 // ── Tile grid view ─────────────────────────────────────────────────────────────
 
 function TileGrid(): React.ReactElement {
-  const terminals = useAppStore((s) => s.terminals)
+  const allTerminals = useAppStore((s) => s.terminals)
+  const detachedTerminalIds = useAppStore((s) => s.detachedTerminalIds)
+  const terminals = allTerminals.filter((t) => !detachedTerminalIds[t.id])
   const containerRef = useRef<HTMLDivElement>(null)
   // Array of column container DOM refs (populated via ref callbacks)
   const colRefs = useRef<(HTMLDivElement | null)[]>([])
@@ -468,7 +470,8 @@ function TileGrid(): React.ReactElement {
 }
 
 export function TerminalView(): React.ReactElement {
-  const { terminals, activeTerminalId, splits, removeSplit, theme, tileMode } = useAppStore()
+  const { terminals: allTerminals, activeTerminalId, splits, removeSplit, theme, tileMode, detachedTerminalIds } = useAppStore()
+  const terminals = allTerminals.filter((t) => !detachedTerminalIds[t.id])
   const activeSplit = activeTerminalId ? splits[activeTerminalId] : undefined
   const splitSession = activeSplit?.session ?? null
   const splitDirection = activeSplit?.direction ?? 'vertical'
