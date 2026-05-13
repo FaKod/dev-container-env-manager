@@ -3,7 +3,15 @@ import { SplitSquareHorizontal, SplitSquareVertical, Plus, X, LayoutGrid, Rows3,
 import { useAppStore } from '../store/useAppStore'
 import { cleanupTerminalInstance } from './TerminalView'
 import { toast } from './Toast'
-import type { TerminalContext } from '../../../shared/types'
+import type { TerminalContext, Profile } from '../../../shared/types'
+
+// Mirrors the auto-color fallback used by ProfileCard so tabs match their card.
+const AUTO_PALETTE = ['--blue', '--mauve', '--teal', '--peach', '--green', '--sapphire']
+function profileColorVar(profile: Profile | undefined): string {
+  if (profile?.color) return profile.color
+  if (!profile) return '--overlay0'
+  return AUTO_PALETTE[profile.name.charCodeAt(0) % AUTO_PALETTE.length]
+}
 
 export function TerminalTabs(): React.ReactElement {
   const {
@@ -134,12 +142,14 @@ export function TerminalTabs(): React.ReactElement {
           !!profile?.container &&
           (profile.container.terminalMode ?? 'smart') !== 'exec' &&
           terminals.find(other => other.profileId === t.profileId) === t
+        const tabColor = profileColorVar(profile)
         return (
         <div
           key={t.id}
           className={`terminal-tab${activeTerminalId === t.id ? ' active' : ''}${!t.active ? ' inactive' : ''}`}
           onClick={() => handleTabClick(t.id, t.profileId)}
           title={t.title}
+          style={{ ['--tab-color' as string]: `var(${tabColor})` }}
         >
           <span
             className={`terminal-tab-context tab-ctx-${t.context}`}

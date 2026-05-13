@@ -296,7 +296,7 @@ export class TerminalManager extends EventEmitter {
     this.terminals.get(terminalId)?.pty.resize(cols, rows)
   }
 
-  destroy(terminalId: string, hard = false): void {
+  destroy(terminalId: string): void {
     const entry = this.terminals.get(terminalId)
     if (!entry) return
     const profileId = entry.session.profileId
@@ -311,26 +311,18 @@ export class TerminalManager extends EventEmitter {
       } catch { /* window destroyed */ }
     }
 
-    if (!hard) {
-      // Send 'exit' so the remote shell (and docker exec) exits cleanly
-      try { entry.pty.write('exit\n') } catch { /* already dead */ }
-      // Force-kill after 300 ms in case exit didn't propagate in time
-      setTimeout(() => {
-        try { entry.pty.kill() } catch { /* already dead */ }
-      }, 300)
-    } else {
-      // Hard kill — skip exit\n so no buffered command reaches the remote on resume
-      try { entry.pty.kill() } catch { /* already dead */ }
-    }
+    // SIGHUP via pty.kill() — propagates through ssh / docker exec without
+    // writing a visible "exit" command to the user's terminal first.
+    try { entry.pty.kill() } catch { /* already dead */ }
 
     this.checkAutoDisconnect(profileId)
   }
 
-  destroyForProfile(profileId: string, hard = false): void {
+  destroyForProfile(profileId: string): void {
     this.suppressAutoDisconnect.add(profileId)
     for (const [id, entry] of this.terminals.entries()) {
       if (entry.session.profileId === profileId) {
-        this.destroy(id, hard)
+        this.destroy(id)
       }
     }
     this.suppressAutoDisconnect.delete(profileId)

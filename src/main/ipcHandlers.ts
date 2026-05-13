@@ -181,7 +181,7 @@ export function setupIpcHandlers(opts: SetupOptions): void {
   })
 
   ipcMain.handle('connection:disconnect', async (_e, profileId: string) => {
-    terminalManager.destroyForProfile(profileId, true)
+    terminalManager.destroyForProfile(profileId)
     await connectionManager.disconnect(profileId)
   })
 
