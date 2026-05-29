@@ -20,6 +20,10 @@ interface AppStore {
   // ── UI state ────────────────────────────────────────────────────────────────
   activeProfileId: string | null
   activeTerminalId: string | null
+  // Which visible terminal currently owns the keyboard. Distinct from
+  // activeTerminalId because in split/tile modes multiple terminals are
+  // visible at once but only one can have focus.
+  focusedTerminalId: string | null
   splits: Record<string, { session: TerminalSession; direction: 'vertical' | 'horizontal' }>
   // Terminal IDs currently displayed in their own detached BrowserWindow.
   // They stay in `terminals[]` so re-attaching can find them again, but are
@@ -59,6 +63,7 @@ interface AppStore {
 
   setActiveProfile: (id: string | null) => void
   setActiveTerminal: (id: string | null) => void
+  setFocusedTerminal: (id: string | null) => void
   setSplitSession: (primaryId: string, session: TerminalSession, direction: 'vertical' | 'horizontal') => void
   removeSplit: (primaryId: string) => void
   setTerminalDetached: (id: string, detached: boolean) => void
@@ -82,6 +87,7 @@ export const useAppStore = create<AppStore>((set) => ({
 
   activeProfileId: null,
   activeTerminalId: null,
+  focusedTerminalId: null,
   splits: {},
   detachedTerminalIds: {},
   showProfileEditor: false,
@@ -148,9 +154,11 @@ export const useAppStore = create<AppStore>((set) => ({
       delete nextSplits[id]
       const nextDetached = { ...s.detachedTerminalIds }
       delete nextDetached[id]
+      const nextActive = s.activeTerminalId === id ? null : s.activeTerminalId
       return {
         terminals: s.terminals.filter((t) => t.id !== id),
-        activeTerminalId: s.activeTerminalId === id ? null : s.activeTerminalId,
+        activeTerminalId: nextActive,
+        focusedTerminalId: s.focusedTerminalId === id ? nextActive : s.focusedTerminalId,
         splits: nextSplits,
         detachedTerminalIds: nextDetached
       }
@@ -186,16 +194,26 @@ export const useAppStore = create<AppStore>((set) => ({
 
   setActiveProfile: (id) => set({ activeProfileId: id }),
 
-  setActiveTerminal: (id) => set({ activeTerminalId: id }),
+  setActiveTerminal: (id) => set({ activeTerminalId: id, focusedTerminalId: id }),
+
+  setFocusedTerminal: (id) => set({ focusedTerminalId: id }),
 
   setSplitSession: (primaryId, session, direction) =>
-    set((s) => ({ splits: { ...s.splits, [primaryId]: { session, direction } } })),
+    set((s) => ({
+      splits: { ...s.splits, [primaryId]: { session, direction } },
+      focusedTerminalId: session.id
+    })),
 
   removeSplit: (primaryId) =>
     set((s) => {
       const next = { ...s.splits }
+      const removed = s.splits[primaryId]
       delete next[primaryId]
-      return { splits: next }
+      const focused =
+        removed && s.focusedTerminalId === removed.session.id
+          ? primaryId
+          : s.focusedTerminalId
+      return { splits: next, focusedTerminalId: focused }
     }),
 
   setTerminalDetached: (id, detached) =>

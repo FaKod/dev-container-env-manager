@@ -43,8 +43,8 @@ export function applyFontSize(size: number): void {
   terminalFontSize = Math.max(8, Math.min(28, size))
   for (const inst of terminalInstances.values()) {
     inst.xterm.options.fontSize = terminalFontSize
-    requestAnimationFrame(() => inst.fitAddon.fit())
   }
+  fitAll(Array.from(terminalInstances.keys()))
 }
 
 export const increaseFontSize = (): void => applyFontSize(terminalFontSize + 1)
@@ -172,10 +172,15 @@ function createXterm(
 interface TerminalPaneProps {
   session: TerminalSession
   visible: boolean
+  focused: boolean
 }
 
-export function TerminalPane({ session, visible }: TerminalPaneProps): React.ReactElement {
-  const { markTerminalInactive, markTerminalUnread, markTerminalRead, setTerminalTitle } = useAppStore()
+export function TerminalPane({ session, visible, focused }: TerminalPaneProps): React.ReactElement {
+  const markTerminalInactive = useAppStore((s) => s.markTerminalInactive)
+  const markTerminalUnread = useAppStore((s) => s.markTerminalUnread)
+  const markTerminalRead = useAppStore((s) => s.markTerminalRead)
+  const setTerminalTitle = useAppStore((s) => s.setTerminalTitle)
+  const setFocusedTerminal = useAppStore((s) => s.setFocusedTerminal)
   const profileName = useAppStore((s) => s.profiles.find((p) => p.id === session.profileId)?.name ?? '')
   const containerRef = useRef<HTMLDivElement>(null)
   const initializedRef = useRef(false)
@@ -233,7 +238,9 @@ export function TerminalPane({ session, visible }: TerminalPaneProps): React.Rea
     if (visible) markTerminalRead(session.id)
   }, [visible, session.id])
 
-  // Fit when becoming visible; blur when hidden
+  // Fit when becoming visible; focus only when also marked focused.
+  // Blur when hidden, or when visible-but-not-focused so the other pane in a
+  // split/tile gets the keyboard.
   useEffect(() => {
     const inst = terminalInstances.get(session.id)
     if (!inst) return
@@ -244,8 +251,10 @@ export function TerminalPane({ session, visible }: TerminalPaneProps): React.Rea
     requestAnimationFrame(() => {
       inst.fitAddon.fit()
       window.api.terminalResize(session.id, inst.xterm.cols, inst.xterm.rows)
+      if (focused) inst.xterm.focus()
+      else inst.xterm.blur()
     })
-  }, [visible, session.id])
+  }, [visible, focused, session.id])
 
   // Handle window/pane resize — debounced via rAF to avoid rapid-fire IPC
   useEffect(() => {
@@ -285,6 +294,7 @@ export function TerminalPane({ session, visible }: TerminalPaneProps): React.Rea
     <div
       ref={containerRef}
       className={`terminal-wrapper${visible ? ' visible' : ''}`}
+      onMouseDown={() => { if (!focused) setFocusedTerminal(session.id) }}
     >
       {findOpen && visible && (
         <div className="terminal-find-bar">
@@ -318,15 +328,26 @@ export function TerminalPane({ session, visible }: TerminalPaneProps): React.Rea
 
 // ── TerminalView ───────────────────────────────────────────────────────────────
 
+// Coalesce repeat fit requests within a single animation frame. Drag handlers
+// can call fitAll on every mousemove with overlapping id sets — one frame, one
+// fit per terminal.
+const pendingFit = new Set<string>()
+let fitRafId = 0
+
 function fitAll(ids: string[]): void {
-  for (const id of ids) {
-    const inst = terminalInstances.get(id)
-    if (!inst) continue
-    requestAnimationFrame(() => {
+  for (const id of ids) pendingFit.add(id)
+  if (fitRafId !== 0) return
+  fitRafId = requestAnimationFrame(() => {
+    fitRafId = 0
+    const batch = Array.from(pendingFit)
+    pendingFit.clear()
+    for (const id of batch) {
+      const inst = terminalInstances.get(id)
+      if (!inst) continue
       inst.fitAddon.fit()
       window.api.terminalResize(id, inst.xterm.cols, inst.xterm.rows)
-    })
-  }
+    }
+  })
 }
 
 // ── Tile grid view ─────────────────────────────────────────────────────────────
@@ -334,6 +355,9 @@ function fitAll(ids: string[]): void {
 function TileGrid(): React.ReactElement {
   const allTerminals = useAppStore((s) => s.terminals)
   const detachedTerminalIds = useAppStore((s) => s.detachedTerminalIds)
+  const focusedTerminalId = useAppStore((s) => s.focusedTerminalId)
+  const setActiveTerminal = useAppStore((s) => s.setActiveTerminal)
+  const setActiveProfile = useAppStore((s) => s.setActiveProfile)
   const terminals = allTerminals.filter((t) => !detachedTerminalIds[t.id])
   const containerRef = useRef<HTMLDivElement>(null)
   // Array of column container DOM refs (populated via ref callbacks)
@@ -433,11 +457,19 @@ function TileGrid(): React.ReactElement {
               className="terminal-tile-col"
               style={{ flex: `${(colRatios[colIdx] ?? 1) / totalColFr} 0 0` }}
             >
-              {colTerminals.map((session, rowIdx) => (
+              {colTerminals.map((session, rowIdx) => {
+                const isFocused = focusedTerminalId === session.id
+                return (
                 <React.Fragment key={session.id}>
                   <div
-                    className="terminal-tile"
+                    className={`terminal-tile${isFocused ? ' focused' : ''}`}
                     style={{ flex: `${(rows[rowIdx] ?? 1) / totalRowFr} 0 0` }}
+                    onMouseDown={() => {
+                      if (focusedTerminalId !== session.id) {
+                        setActiveTerminal(session.id)
+                        setActiveProfile(session.profileId)
+                      }
+                    }}
                   >
                     <div className="terminal-tile-header">
                       <span
@@ -449,7 +481,7 @@ function TileGrid(): React.ReactElement {
                       <span className="terminal-tile-title">{session.title}</span>
                     </div>
                     <div className="terminal-tile-body">
-                      <TerminalPane session={session} visible={true} />
+                      <TerminalPane session={session} visible={true} focused={isFocused} />
                     </div>
                   </div>
                   {rowIdx < colTerminals.length - 1 && (
@@ -459,7 +491,8 @@ function TileGrid(): React.ReactElement {
                     />
                   )}
                 </React.Fragment>
-              ))}
+                )
+              })}
             </div>
             {colIdx < columns.length - 1 && (
               <div
@@ -475,7 +508,14 @@ function TileGrid(): React.ReactElement {
 }
 
 export function TerminalView(): React.ReactElement {
-  const { terminals: allTerminals, activeTerminalId, splits, removeSplit, theme, tileMode, detachedTerminalIds } = useAppStore()
+  const allTerminals = useAppStore((s) => s.terminals)
+  const activeTerminalId = useAppStore((s) => s.activeTerminalId)
+  const focusedTerminalId = useAppStore((s) => s.focusedTerminalId)
+  const splits = useAppStore((s) => s.splits)
+  const removeSplit = useAppStore((s) => s.removeSplit)
+  const theme = useAppStore((s) => s.theme)
+  const tileMode = useAppStore((s) => s.tileMode)
+  const detachedTerminalIds = useAppStore((s) => s.detachedTerminalIds)
   const terminals = allTerminals.filter((t) => !detachedTerminalIds[t.id])
   const activeSplit = activeTerminalId ? splits[activeTerminalId] : undefined
   const splitSession = activeSplit?.session ?? null
@@ -565,7 +605,11 @@ export function TerminalView(): React.ReactElement {
           style={{ flexDirection: splitDirection === 'vertical' ? 'row' : 'column' }}
         >
           <div className="terminal-split-pane" style={{ flex: `${splitRatio} 0 0` }}>
-            <TerminalPane session={activeSession} visible={true} />
+            <TerminalPane
+              session={activeSession}
+              visible={true}
+              focused={focusedTerminalId === activeSession.id}
+            />
             <div className={`context-breadcrumb ctx-${activeSession.context}`}>
               {activeSession.context.toUpperCase()}
             </div>
@@ -575,7 +619,11 @@ export function TerminalView(): React.ReactElement {
             onMouseDown={handleDividerMouseDown}
           />
           <div className="terminal-split-pane" style={{ flex: `${1 - splitRatio} 0 0` }}>
-            <TerminalPane session={splitSession} visible={true} />
+            <TerminalPane
+              session={splitSession}
+              visible={true}
+              focused={focusedTerminalId === splitSession.id}
+            />
             <div className={`context-breadcrumb ctx-${splitSession.context}`}>
               {splitSession.context.toUpperCase()}
             </div>
@@ -587,7 +635,7 @@ export function TerminalView(): React.ReactElement {
           const isVisible = session.id === activeTerminalId
           return (
             <React.Fragment key={session.id}>
-              <TerminalPane session={session} visible={isVisible} />
+              <TerminalPane session={session} visible={isVisible} focused={isVisible} />
               {isVisible && (
                 <div className={`context-breadcrumb ctx-${session.context}`}>
                   {session.context.toUpperCase()}

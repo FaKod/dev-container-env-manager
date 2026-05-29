@@ -10,8 +10,12 @@ interface Props {
 }
 
 export function StatusPanel({ profileId }: Props): React.ReactElement {
-  const { profiles, connections, containers, setContainerState, addTerminal, setActiveTerminal } =
-    useAppStore()
+  const profiles = useAppStore((s) => s.profiles)
+  const connections = useAppStore((s) => s.connections)
+  const containers = useAppStore((s) => s.containers)
+  const setContainerState = useAppStore((s) => s.setContainerState)
+  const addTerminal = useAppStore((s) => s.addTerminal)
+  const setActiveTerminal = useAppStore((s) => s.setActiveTerminal)
 
   const profile = profiles.find((p) => p.id === profileId)
   const connState = connections[profileId]

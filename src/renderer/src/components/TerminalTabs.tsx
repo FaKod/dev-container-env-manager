@@ -14,25 +14,23 @@ function profileColorVar(profile: Profile | undefined): string {
 }
 
 export function TerminalTabs(): React.ReactElement {
-  const {
-    terminals,
-    activeTerminalId,
-    splits,
-    detachedTerminalIds,
-    activeProfileId,
-    profiles,
-    connections,
-    containers,
-    tileMode,
-    toggleTileMode,
-    setActiveTerminal,
-    setActiveProfile,
-    removeTerminal,
-    addTerminal,
-    markTerminalRead,
-    setSplitSession,
-    removeSplit
-  } = useAppStore()
+  const terminals = useAppStore((s) => s.terminals)
+  const activeTerminalId = useAppStore((s) => s.activeTerminalId)
+  const splits = useAppStore((s) => s.splits)
+  const detachedTerminalIds = useAppStore((s) => s.detachedTerminalIds)
+  const activeProfileId = useAppStore((s) => s.activeProfileId)
+  const profiles = useAppStore((s) => s.profiles)
+  const connections = useAppStore((s) => s.connections)
+  const containers = useAppStore((s) => s.containers)
+  const tileMode = useAppStore((s) => s.tileMode)
+  const toggleTileMode = useAppStore((s) => s.toggleTileMode)
+  const setActiveTerminal = useAppStore((s) => s.setActiveTerminal)
+  const setActiveProfile = useAppStore((s) => s.setActiveProfile)
+  const removeTerminal = useAppStore((s) => s.removeTerminal)
+  const addTerminal = useAppStore((s) => s.addTerminal)
+  const markTerminalRead = useAppStore((s) => s.markTerminalRead)
+  const setSplitSession = useAppStore((s) => s.setSplitSession)
+  const removeSplit = useAppStore((s) => s.removeSplit)
 
   const visibleTerminals = terminals.filter((t) => !detachedTerminalIds[t.id])
 

@@ -98,7 +98,7 @@ export function DetachedTerminalApp({ terminalId }: Props): React.ReactElement {
         </button>
       </div>
       <div className="detached-terminal-body">
-        <TerminalPane session={session} visible={true} />
+        <TerminalPane session={session} visible={true} focused={true} />
       </div>
       <ToastContainer />
     </div>

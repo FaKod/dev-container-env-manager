@@ -12,22 +12,20 @@ import { ConfirmModal } from './components/ConfirmModal'
 import { useResizablePane } from './hooks/useResizablePane'
 
 export default function App(): React.ReactElement {
-  const {
-    showProfileEditor,
-    showLogViewer,
-    showStatusPanel,
-    theme,
-    profiles,
-    setProfiles,
-    setProjects,
-    setConnectionState,
-    setContainerState,
-    addLog,
-    addTerminal,
-    setActiveTerminal,
-    setActiveProfile,
-    setTerminalDetached
-  } = useAppStore()
+  const showProfileEditor = useAppStore((s) => s.showProfileEditor)
+  const showLogViewer = useAppStore((s) => s.showLogViewer)
+  const showStatusPanel = useAppStore((s) => s.showStatusPanel)
+  const theme = useAppStore((s) => s.theme)
+  const profiles = useAppStore((s) => s.profiles)
+  const setProfiles = useAppStore((s) => s.setProfiles)
+  const setProjects = useAppStore((s) => s.setProjects)
+  const setConnectionState = useAppStore((s) => s.setConnectionState)
+  const setContainerState = useAppStore((s) => s.setContainerState)
+  const addLog = useAppStore((s) => s.addLog)
+  const addTerminal = useAppStore((s) => s.addTerminal)
+  const setActiveTerminal = useAppStore((s) => s.setActiveTerminal)
+  const setActiveProfile = useAppStore((s) => s.setActiveProfile)
+  const setTerminalDetached = useAppStore((s) => s.setTerminalDetached)
 
   const { size: sidebarWidth, handleMouseDown: sidebarMouseDown } = useResizablePane(280, 180, 480, 'horizontal')
   const { size: bottomHeight, handleMouseDown: bottomMouseDown } = useResizablePane(200, 90, 600, 'vertical')
@@ -137,23 +135,6 @@ export default function App(): React.ReactElement {
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [])
-
-  // ── Release xterm keyboard focus when focus moves to any non-terminal element ──
-  useEffect(() => {
-    const handleFocusIn = (e: FocusEvent): void => {
-      const target = e.target as HTMLElement
-      if (target.closest('.terminal-container')) return
-      // Something outside the terminal received focus — ensure xterm gives up its textarea focus
-      const xtermTextarea = document.querySelector<HTMLTextAreaElement>(
-        '.terminal-container textarea'
-      )
-      if (xtermTextarea && document.activeElement !== xtermTextarea) {
-        xtermTextarea.blur()
-      }
-    }
-    document.addEventListener('focusin', handleFocusIn)
-    return () => document.removeEventListener('focusin', handleFocusIn)
   }, [])
 
   return (

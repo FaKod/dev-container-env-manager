@@ -13,9 +13,22 @@ export function LogViewer(): React.ReactElement {
     window.api.getLogs().then(setLogs).catch(console.error)
   }, [])
 
-  // Auto-scroll to bottom on new entries
+  // Auto-scroll to bottom on new entries. rAF-throttled so burst arrivals don't
+  // stack scroll animations; instant scroll avoids the half-finished smooth
+  // animations that smooth-scrollIntoView produces when entries land rapidly.
+  const scrollRafRef = useRef(0)
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (scrollRafRef.current !== 0) cancelAnimationFrame(scrollRafRef.current)
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = 0
+      bottomRef.current?.scrollIntoView({ block: 'end' })
+    })
+    return () => {
+      if (scrollRafRef.current !== 0) {
+        cancelAnimationFrame(scrollRafRef.current)
+        scrollRafRef.current = 0
+      }
+    }
   }, [logs.length])
 
   const filtered = logs.filter((e) => {
