@@ -9,8 +9,8 @@ ARM64 (aarch64) Linux container. Node.js is **not** pre-installed.
 Install everything in one shot:
 
 ```bash
-# Node.js 20
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+# Node.js 22
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
 # Electron runtime dependencies
