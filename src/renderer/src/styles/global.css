@@ -609,6 +609,8 @@ html, body, #root {
 }
 
 .terminal-tab.inactive { opacity: 0.5; }
+.terminal-tab.dragging { opacity: 0.35; cursor: grabbing; }
+.terminal-tab.drag-over { background: rgba(137, 180, 250, 0.12); box-shadow: inset 3px 0 0 var(--blue); }
 
 .terminal-tab-title {
   overflow: hidden;

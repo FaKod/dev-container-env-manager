@@ -53,6 +53,7 @@ interface AppStore {
   setTerminals: (terminals: TerminalSession[]) => void
   addTerminal: (session: TerminalSession) => void
   removeTerminal: (id: string) => void
+  reorderTerminals: (fromId: string, toId: string) => void
   markTerminalInactive: (id: string) => void
   markTerminalUnread: (id: string) => void
   markTerminalRead: (id: string) => void
@@ -147,6 +148,17 @@ export const useAppStore = create<AppStore>((set) => ({
 
   addTerminal: (session) =>
     set((s) => ({ terminals: [...s.terminals, session] })),
+
+  reorderTerminals: (fromId, toId) =>
+    set((s) => {
+      const arr = [...s.terminals]
+      const fromIdx = arr.findIndex((t) => t.id === fromId)
+      const toIdx   = arr.findIndex((t) => t.id === toId)
+      if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return s
+      const [item] = arr.splice(fromIdx, 1)
+      arr.splice(toIdx, 0, item)
+      return { terminals: arr }
+    }),
 
   removeTerminal: (id) =>
     set((s) => {

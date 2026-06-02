@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { SplitSquareHorizontal, SplitSquareVertical, Plus, X, LayoutGrid, Rows3, Anchor, ExternalLink, RefreshCw } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { cleanupTerminalInstance } from './TerminalView'
@@ -31,6 +31,10 @@ export function TerminalTabs(): React.ReactElement {
   const markTerminalRead = useAppStore((s) => s.markTerminalRead)
   const setSplitSession = useAppStore((s) => s.setSplitSession)
   const removeSplit = useAppStore((s) => s.removeSplit)
+  const reorderTerminals = useAppStore((s) => s.reorderTerminals)
+
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
 
   const visibleTerminals = terminals.filter((t) => !detachedTerminalIds[t.id])
 
@@ -190,10 +194,42 @@ export function TerminalTabs(): React.ReactElement {
         return (
         <div
           key={t.id}
-          className={`terminal-tab${activeTerminalId === t.id ? ' active' : ''}${!t.active ? ' inactive' : ''}`}
+          className={[
+            'terminal-tab',
+            activeTerminalId === t.id ? 'active' : '',
+            !t.active ? 'inactive' : '',
+            draggingId === t.id ? 'dragging' : '',
+            dragOverId === t.id && draggingId !== t.id ? 'drag-over' : '',
+          ].filter(Boolean).join(' ')}
           onClick={() => handleTabClick(t.id, t.profileId)}
           title={t.title}
           style={{ ['--tab-color' as string]: `var(${tabColor})` }}
+          draggable
+          onDragStart={(e) => {
+            setDraggingId(t.id)
+            e.dataTransfer.effectAllowed = 'move'
+          }}
+          onDragEnter={(e) => {
+            e.preventDefault()
+            if (draggingId && draggingId !== t.id) setDragOverId(t.id)
+          }}
+          onDragOver={(e) => {
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'move'
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverId(null)
+          }}
+          onDrop={(e) => {
+            e.preventDefault()
+            if (draggingId && draggingId !== t.id) reorderTerminals(draggingId, t.id)
+            setDraggingId(null)
+            setDragOverId(null)
+          }}
+          onDragEnd={() => {
+            setDraggingId(null)
+            setDragOverId(null)
+          }}
         >
           <span
             className={`terminal-tab-context tab-ctx-${t.context}`}
