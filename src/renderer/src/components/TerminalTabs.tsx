@@ -1,5 +1,5 @@
 import React from 'react'
-import { SplitSquareHorizontal, SplitSquareVertical, Plus, X, LayoutGrid, Rows3, Anchor, ExternalLink } from 'lucide-react'
+import { SplitSquareHorizontal, SplitSquareVertical, Plus, X, LayoutGrid, Rows3, Anchor, ExternalLink, RefreshCw } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { cleanupTerminalInstance } from './TerminalView'
 import { toast } from './Toast'
@@ -111,6 +111,52 @@ export function TerminalTabs(): React.ReactElement {
     }
   }
 
+  async function handleReconnectAll(): Promise<void> {
+    const exited = terminals.filter((t) => !t.active && !detachedTerminalIds[t.id])
+    if (exited.length === 0) return
+
+    function isReady(t: (typeof exited)[0]): boolean {
+      if (t.context === 'local') return true
+      if (connections[t.profileId]?.status !== 'connected') return false
+      if (t.context === 'container' && containers[t.profileId]?.status !== 'running') return false
+      return true
+    }
+
+    const ready = exited.filter(isReady)
+    const blocked = exited.filter((t) => !isReady(t))
+
+    // Kick off SSH reconnection for blocked profiles (fire-and-forget, deduplicated)
+    const launched = new Set<string>()
+    for (const t of blocked) {
+      if (!launched.has(t.profileId)) {
+        launched.add(t.profileId)
+        window.api.launch(t.profileId).catch(() => {/* ConnectionManager surfaces errors */})
+      }
+    }
+    if (blocked.length > 0) {
+      toast('Reconnecting profile — click Reconnect All again when ready.')
+    }
+
+    let firstNewId: string | null = null
+    for (const t of ready) {
+      try {
+        await window.api.destroyTerminal(t.id)
+      } catch {
+        // PTY already cleaned up — continue
+      }
+      removeTerminal(t.id)
+      try {
+        const session = await window.api.createTerminal(t.profileId, t.context, 120, 36)
+        addTerminal(session)
+        if (firstNewId === null) firstNewId = session.id
+      } catch (err) {
+        toast.error(`Failed to restart terminal: ${err}`)
+      }
+    }
+
+    if (firstNewId) setActiveTerminal(firstNewId)
+  }
+
   async function handleAddTab(): Promise<void> {
     if (!activeProfileId) return
     const profile = profiles.find((p) => p.id === activeProfileId)
@@ -205,6 +251,16 @@ export function TerminalTabs(): React.ReactElement {
           title="Open new terminal for active profile"
         >
           <Plus size={14} />
+        </div>
+      )}
+
+      {terminals.some((t) => !t.active) && (
+        <div
+          className="terminal-tabs-add"
+          onClick={handleReconnectAll}
+          title="Reconnect all exited terminals"
+        >
+          <RefreshCw size={14} />
         </div>
       )}
 
