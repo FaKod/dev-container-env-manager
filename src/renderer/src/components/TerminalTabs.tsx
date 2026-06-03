@@ -143,19 +143,23 @@ export function TerminalTabs(): React.ReactElement {
 
     let firstNewId: string | null = null
     for (const t of ready) {
+      let session
+      try {
+        // Create BEFORE destroying: keeps the profile's terminal count > 0 so the
+        // profileTerminalsEmpty auto-disconnect never fires between destroy and create.
+        session = await window.api.createTerminal(t.profileId, t.context, 120, 36)
+      } catch (err) {
+        toast.error(`Failed to restart terminal: ${err}`)
+        continue // leave the dead tab in place
+      }
+      addTerminal(session)
+      if (firstNewId === null) firstNewId = session.id
       try {
         await window.api.destroyTerminal(t.id)
       } catch {
         // PTY already cleaned up — continue
       }
       removeTerminal(t.id)
-      try {
-        const session = await window.api.createTerminal(t.profileId, t.context, 120, 36)
-        addTerminal(session)
-        if (firstNewId === null) firstNewId = session.id
-      } catch (err) {
-        toast.error(`Failed to restart terminal: ${err}`)
-      }
     }
 
     if (firstNewId) setActiveTerminal(firstNewId)
