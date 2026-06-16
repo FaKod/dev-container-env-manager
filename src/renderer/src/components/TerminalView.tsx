@@ -3,8 +3,8 @@ import { Terminal as TerminalIcon, ChevronUp, ChevronDown, X as XIcon } from 'lu
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
-import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
+import { WrappedLinkProvider } from './wrappedLinkProvider'
 import { useAppStore } from '../store/useAppStore'
 import type { TerminalSession } from '../../../shared/types'
 
@@ -54,12 +54,13 @@ export const resetFontSize    = (): void => applyFontSize(13)
 // ── Keep xterm instances alive across renders, keyed by terminal ID ────────────
 const terminalInstances = new Map<
   string,
-  { xterm: Terminal; fitAddon: FitAddon; searchAddon: SearchAddon }
+  { xterm: Terminal; fitAddon: FitAddon; searchAddon: SearchAddon; mouseModeObserver: MutationObserver }
 >()
 
 export function cleanupTerminalInstance(id: string): void {
   const inst = terminalInstances.get(id)
   if (inst) {
+    inst.mouseModeObserver.disconnect()
     inst.xterm.dispose()
     terminalInstances.delete(id)
   }
@@ -70,8 +71,9 @@ function createXterm(
   terminalId: string,
   onData: (data: string) => void,
   onOpenFind: () => void,
-  onTitleChange: (title: string) => void
-): { xterm: Terminal; fitAddon: FitAddon; searchAddon: SearchAddon } {
+  onTitleChange: (title: string) => void,
+  onMouseModeChange: (active: boolean) => void
+): { xterm: Terminal; fitAddon: FitAddon; searchAddon: SearchAddon; mouseModeObserver: MutationObserver } {
   const mode = (document.documentElement.dataset.theme as 'dark' | 'light') ?? 'dark'
   const xterm = new Terminal({
     cursorBlink: false,
@@ -84,16 +86,30 @@ function createXterm(
 
   const fitAddon = new FitAddon()
   const searchAddon = new SearchAddon()
-  const webLinksAddon = new WebLinksAddon((_event: MouseEvent, uri: string) => {
-    window.api.openUrl(uri)
-  })
 
   xterm.loadAddon(fitAddon)
   xterm.loadAddon(searchAddon)
-  xterm.loadAddon(webLinksAddon)
+
+  // Custom link provider that reconstructs URLs hard-wrapped across rows (the
+  // stock web-links addon only handles terminal soft-wrap). See wrappedLinkProvider.
+  xterm.registerLinkProvider(
+    new WrappedLinkProvider(xterm, (_event, uri) => window.api.openUrl(uri))
+  )
 
   xterm.open(container)
   fitAddon.fit()
+
+  // When a full-screen app (Claude Code, vim, less…) enables mouse tracking,
+  // xterm disables local text selection and tags the element with
+  // `enable-mouse-events`. Mirror that flag into React so the pane can show a
+  // "hold Shift to select" hint — otherwise select-to-copy silently does nothing.
+  const reportMouseMode = (): void =>
+    onMouseModeChange(xterm.element?.classList.contains('enable-mouse-events') ?? false)
+  const mouseModeObserver = new MutationObserver(reportMouseMode)
+  if (xterm.element) {
+    mouseModeObserver.observe(xterm.element, { attributes: true, attributeFilter: ['class'] })
+  }
+  reportMouseMode()
 
   // OSC 0 = set icon name + title; OSC 2 = set title only — both used by common shells/PS1
   xterm.parser.registerOscHandler(0, (data) => { onTitleChange(data); return true })
@@ -163,8 +179,9 @@ function createXterm(
     navigator.clipboard.readText().then((text) => onData(text)).catch(() => {})
   })
 
-  terminalInstances.set(terminalId, { xterm, fitAddon, searchAddon })
-  return { xterm, fitAddon, searchAddon }
+  const inst = { xterm, fitAddon, searchAddon, mouseModeObserver }
+  terminalInstances.set(terminalId, inst)
+  return inst
 }
 
 // ── TerminalPane ───────────────────────────────────────────────────────────────
@@ -188,6 +205,7 @@ export function TerminalPane({ session, visible, focused }: TerminalPaneProps): 
 
   const [findOpen, setFindOpen] = useState(false)
   const [findTerm, setFindTerm] = useState('')
+  const [mouseMode, setMouseMode] = useState(false)
   const findInputRef = useRef<HTMLInputElement>(null)
 
   // Keep visibleRef current without re-subscribing data handlers
@@ -207,7 +225,7 @@ export function TerminalPane({ session, visible, focused }: TerminalPaneProps): 
   useEffect(() => {
     if (!containerRef.current || initializedRef.current) return
     if (!terminalInstances.has(session.id)) {
-      createXterm(containerRef.current, session.id, handleData, () => setFindOpen(true), (title) => setTerminalTitle(session.id, profileName ? `${profileName}: ${title}` : title))
+      createXterm(containerRef.current, session.id, handleData, () => setFindOpen(true), (title) => setTerminalTitle(session.id, profileName ? `${profileName}: ${title}` : title), setMouseMode)
     } else {
       const inst = terminalInstances.get(session.id)!
       containerRef.current.appendChild(inst.xterm.element!)
@@ -296,6 +314,14 @@ export function TerminalPane({ session, visible, focused }: TerminalPaneProps): 
       className={`terminal-wrapper${visible ? ' visible' : ''}`}
       onMouseDown={() => { if (!focused) setFocusedTerminal(session.id) }}
     >
+      {mouseMode && visible && (
+        <div
+          className="terminal-select-hint"
+          title="This app captures the mouse — hold Shift while dragging to select & copy"
+        >
+          ⇧ SELECT
+        </div>
+      )}
       {findOpen && visible && (
         <div className="terminal-find-bar">
           <input

@@ -1383,6 +1383,24 @@ input[type="checkbox"] { accent-color: var(--blue); }
 .ctx-ssh       { background: rgba(116,199,236,.3); color: var(--sapphire); }
 .ctx-container { background: rgba(166,227,161,.3); color: var(--green); }
 
+/* Shown only while a full-screen app has mouse tracking on (xterm selection
+   disabled). Its presence means: hold Shift to select & copy. */
+.terminal-select-hint {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 10;
+  letter-spacing: 0.05em;
+  background: rgba(249,226,175,.25);
+  color: var(--yellow);
+}
+
 /* ── Toast notifications ───────────────────────────────────────────────────── */
 .toast-container {
   position: fixed;
