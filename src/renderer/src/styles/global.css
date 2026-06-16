@@ -557,6 +557,12 @@ html, body, #root {
 .btn-sm { padding: 3px 8px; font-size: 11px; }
 .btn-full { width: 100%; justify-content: center; }
 
+/* Restore-hidden-terminals button on a profile card: icon + count, accented so
+   it reads as a notification that work is parked out of view. */
+.profile-unhide { width: auto; gap: 3px; padding: 0 6px; color: var(--blue); }
+.profile-unhide:hover:not(:disabled) { color: var(--blue); background: var(--surface0); }
+.profile-unhide-count { font-size: 10px; font-weight: 700; }
+
 /* ── Terminal tabs ─────────────────────────────────────────────────────────── */
 .terminal-tabs {
   height: var(--tab-bar-height);

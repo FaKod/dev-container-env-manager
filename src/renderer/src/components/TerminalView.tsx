@@ -381,10 +381,13 @@ function fitAll(ids: string[]): void {
 function TileGrid(): React.ReactElement {
   const allTerminals = useAppStore((s) => s.terminals)
   const detachedTerminalIds = useAppStore((s) => s.detachedTerminalIds)
+  const hiddenTerminalIds = useAppStore((s) => s.hiddenTerminalIds)
   const focusedTerminalId = useAppStore((s) => s.focusedTerminalId)
   const setActiveTerminal = useAppStore((s) => s.setActiveTerminal)
   const setActiveProfile = useAppStore((s) => s.setActiveProfile)
-  const terminals = allTerminals.filter((t) => !detachedTerminalIds[t.id])
+  const terminals = allTerminals.filter(
+    (t) => !detachedTerminalIds[t.id] && !hiddenTerminalIds[t.id]
+  )
   const containerRef = useRef<HTMLDivElement>(null)
   // Array of column container DOM refs (populated via ref callbacks)
   const colRefs = useRef<(HTMLDivElement | null)[]>([])
@@ -542,7 +545,15 @@ export function TerminalView(): React.ReactElement {
   const theme = useAppStore((s) => s.theme)
   const tileMode = useAppStore((s) => s.tileMode)
   const detachedTerminalIds = useAppStore((s) => s.detachedTerminalIds)
-  const terminals = allTerminals.filter((t) => !detachedTerminalIds[t.id])
+  const hiddenTerminalIds = useAppStore((s) => s.hiddenTerminalIds)
+  const terminals = allTerminals.filter(
+    (t) => !detachedTerminalIds[t.id] && !hiddenTerminalIds[t.id]
+  )
+  // Hidden terminals are kept mounted but never visible so their PTY output is
+  // still written to the xterm buffer (nothing in the renderer buffers it).
+  const hiddenTerminals = allTerminals.filter(
+    (t) => hiddenTerminalIds[t.id] && !detachedTerminalIds[t.id]
+  )
   const activeSplit = activeTerminalId ? splits[activeTerminalId] : undefined
   const splitSession = activeSplit?.session ?? null
   const splitDirection = activeSplit?.direction ?? 'vertical'
@@ -601,6 +612,13 @@ export function TerminalView(): React.ReactElement {
 
   const activeSession = terminals.find((t) => t.id === activeTerminalId)
 
+  // Off-screen keep-alive panes for hidden terminals (display:none via the
+  // wrapper's lack of `.visible`). Rendered in every branch so output keeps
+  // flowing regardless of view mode.
+  const keepAlive = hiddenTerminals.map((session) => (
+    <TerminalPane key={session.id} session={session} visible={false} focused={false} />
+  ))
+
   if (terminals.length === 0) {
     return (
       <div className="terminal-container">
@@ -609,6 +627,7 @@ export function TerminalView(): React.ReactElement {
           <h2>No terminal open</h2>
           <p>Select a profile in the sidebar and click Connect to open a terminal.</p>
         </div>
+        {keepAlive}
       </div>
     )
   }
@@ -617,6 +636,7 @@ export function TerminalView(): React.ReactElement {
     return (
       <div className="terminal-container" style={{ overflow: 'hidden' }}>
         <TileGrid />
+        {keepAlive}
       </div>
     )
   }
@@ -671,6 +691,7 @@ export function TerminalView(): React.ReactElement {
           )
         })
       )}
+      {keepAlive}
     </div>
   )
 }

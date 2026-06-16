@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Pencil, Copy, Trash2, Globe } from 'lucide-react'
+import { Pencil, Copy, Trash2, Globe, Eye } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { toast } from './Toast'
 import { showConfirm } from './ConfirmModal'
@@ -23,8 +23,14 @@ export function ProfileCard({ profile }: Props): React.ReactElement {
     upsertProfile,
     addTerminal,
     markTerminalInactive,
-    openProfileEditor
+    openProfileEditor,
+    hiddenTerminalIds,
+    setTerminalHidden
   } = useAppStore()
+
+  const hiddenForProfile = terminals.filter(
+    (t) => t.profileId === profile.id && hiddenTerminalIds[t.id]
+  )
 
   const [busy, setBusy] = useState(false)
   const connState = connections[profile.id]
@@ -97,6 +103,16 @@ export function ProfileCard({ profile }: Props): React.ReactElement {
     }
   }
 
+  function handleUnhide(e: React.MouseEvent): void {
+    e.stopPropagation()
+    hiddenForProfile.forEach((t) => setTerminalHidden(t.id, false))
+    const first = hiddenForProfile[0]
+    if (first) {
+      setActiveProfile(profile.id)
+      setActiveTerminal(first.id)
+    }
+  }
+
   function handleSelect(): void {
     setActiveProfile(profile.id)
     // Switch to first terminal of this profile if available
@@ -157,6 +173,17 @@ export function ProfileCard({ profile }: Props): React.ReactElement {
             disabled={busy}
           >
             {busy ? 'Connecting…' : 'Connect'}
+          </button>
+        )}
+
+        {hiddenForProfile.length > 0 && (
+          <button
+            className="btn btn-icon profile-unhide"
+            onClick={handleUnhide}
+            title={`Show ${hiddenForProfile.length} hidden terminal${hiddenForProfile.length > 1 ? 's' : ''}`}
+          >
+            <Eye size={12} />
+            <span className="profile-unhide-count">{hiddenForProfile.length}</span>
           </button>
         )}
 

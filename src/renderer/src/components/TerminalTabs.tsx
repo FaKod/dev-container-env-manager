@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { SplitSquareHorizontal, SplitSquareVertical, Plus, X, LayoutGrid, Rows3, Anchor, ExternalLink, RefreshCw } from 'lucide-react'
+import { SplitSquareHorizontal, SplitSquareVertical, Plus, X, LayoutGrid, Rows3, Anchor, ExternalLink, RefreshCw, EyeOff } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { cleanupTerminalInstance } from './TerminalView'
 import { toast } from './Toast'
@@ -18,6 +18,8 @@ export function TerminalTabs(): React.ReactElement {
   const activeTerminalId = useAppStore((s) => s.activeTerminalId)
   const splits = useAppStore((s) => s.splits)
   const detachedTerminalIds = useAppStore((s) => s.detachedTerminalIds)
+  const hiddenTerminalIds = useAppStore((s) => s.hiddenTerminalIds)
+  const setTerminalHidden = useAppStore((s) => s.setTerminalHidden)
   const activeProfileId = useAppStore((s) => s.activeProfileId)
   const profiles = useAppStore((s) => s.profiles)
   const connections = useAppStore((s) => s.connections)
@@ -36,7 +38,9 @@ export function TerminalTabs(): React.ReactElement {
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
 
-  const visibleTerminals = terminals.filter((t) => !detachedTerminalIds[t.id])
+  const visibleTerminals = terminals.filter(
+    (t) => !detachedTerminalIds[t.id] && !hiddenTerminalIds[t.id]
+  )
 
   const activeSplit = activeTerminalId ? splits[activeTerminalId] : undefined
 
@@ -101,6 +105,31 @@ export function TerminalTabs(): React.ReactElement {
     }
   }
 
+  function handleHideTab(e: React.MouseEvent, terminalId: string): void {
+    e.stopPropagation()
+    // Promote a split companion to a regular tab so it isn't lost with the
+    // primary, mirroring detach. The PTY is untouched — view organization only.
+    const split = splits[terminalId]
+    if (split) {
+      addTerminal(split.session)
+      removeSplit(terminalId)
+    }
+    // Move selection to a neighbour when hiding the active tab.
+    if (activeTerminalId === terminalId) {
+      const idx = visibleTerminals.findIndex((t) => t.id === terminalId)
+      const remaining = visibleTerminals.filter((t) => t.id !== terminalId)
+      const next = remaining[idx] ?? remaining[idx - 1]
+      if (next) {
+        setActiveTerminal(next.id)
+        setActiveProfile(next.profileId)
+      } else {
+        setActiveTerminal(null)
+      }
+    }
+    setTerminalHidden(terminalId, true)
+    toast('Terminal hidden — restore it from its profile card.')
+  }
+
   async function handleSplit(direction: 'vertical' | 'horizontal'): Promise<void> {
     if (!activeTerminalId || !activeProfileId) return
     const profile = profiles.find((p) => p.id === activeProfileId)
@@ -116,7 +145,9 @@ export function TerminalTabs(): React.ReactElement {
   }
 
   async function handleReconnectAll(): Promise<void> {
-    const exited = terminals.filter((t) => !t.active && !detachedTerminalIds[t.id])
+    const exited = terminals.filter(
+      (t) => !t.active && !detachedTerminalIds[t.id] && !hiddenTerminalIds[t.id]
+    )
     if (exited.length === 0) return
 
     function isReady(t: (typeof exited)[0]): boolean {
@@ -249,6 +280,13 @@ export function TerminalTabs(): React.ReactElement {
           <button
             className="btn btn-icon"
             style={{ marginLeft: 4 }}
+            onClick={(e) => handleHideTab(e, t.id)}
+            title="Hide from view (keeps running; restore from its profile)"
+          >
+            <EyeOff size={11} />
+          </button>
+          <button
+            className="btn btn-icon"
             onClick={(e) => handleDetachTab(e, t.id)}
             title="Detach into its own window"
           >

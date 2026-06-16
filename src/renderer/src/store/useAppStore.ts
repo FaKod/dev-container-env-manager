@@ -29,6 +29,10 @@ interface AppStore {
   // They stay in `terminals[]` so re-attaching can find them again, but are
   // hidden from tabs/splits/tiles in the main window.
   detachedTerminalIds: Record<string, true>
+  // Terminal IDs hidden from the main view for organization only. The PTY and
+  // its xterm instance stay alive (the pane is kept mounted off-screen), so
+  // un-hiding restores the terminal with all output intact.
+  hiddenTerminalIds: Record<string, true>
   showProfileEditor: boolean
   editingProfileId: string | null
   showLogViewer: boolean
@@ -68,6 +72,7 @@ interface AppStore {
   setSplitSession: (primaryId: string, session: TerminalSession, direction: 'vertical' | 'horizontal') => void
   removeSplit: (primaryId: string) => void
   setTerminalDetached: (id: string, detached: boolean) => void
+  setTerminalHidden: (id: string, hidden: boolean) => void
   openProfileEditor: (profileId?: string) => void
   closeProfileEditor: () => void
   toggleLogViewer: () => void
@@ -91,6 +96,7 @@ export const useAppStore = create<AppStore>((set) => ({
   focusedTerminalId: null,
   splits: {},
   detachedTerminalIds: {},
+  hiddenTerminalIds: {},
   showProfileEditor: false,
   editingProfileId: null,
   showLogViewer: false,
@@ -166,13 +172,16 @@ export const useAppStore = create<AppStore>((set) => ({
       delete nextSplits[id]
       const nextDetached = { ...s.detachedTerminalIds }
       delete nextDetached[id]
+      const nextHidden = { ...s.hiddenTerminalIds }
+      delete nextHidden[id]
       const nextActive = s.activeTerminalId === id ? null : s.activeTerminalId
       return {
         terminals: s.terminals.filter((t) => t.id !== id),
         activeTerminalId: nextActive,
         focusedTerminalId: s.focusedTerminalId === id ? nextActive : s.focusedTerminalId,
         splits: nextSplits,
-        detachedTerminalIds: nextDetached
+        detachedTerminalIds: nextDetached,
+        hiddenTerminalIds: nextHidden
       }
     }),
 
@@ -234,6 +243,14 @@ export const useAppStore = create<AppStore>((set) => ({
       if (detached) next[id] = true
       else delete next[id]
       return { detachedTerminalIds: next }
+    }),
+
+  setTerminalHidden: (id, hidden) =>
+    set((s) => {
+      const next = { ...s.hiddenTerminalIds }
+      if (hidden) next[id] = true
+      else delete next[id]
+      return { hiddenTerminalIds: next }
     }),
 
   openProfileEditor: (profileId) =>
