@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { SplitSquareHorizontal, SplitSquareVertical, Plus, X, LayoutGrid, Rows3, Anchor, ExternalLink, RefreshCw, EyeOff } from 'lucide-react'
+import React, { useState, useEffect, useRef } from 'react'
+import { SplitSquareHorizontal, SplitSquareVertical, Plus, X, LayoutGrid, Rows3, Anchor, ExternalLink, RefreshCw, EyeOff, ChevronDown } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { cleanupTerminalInstance } from './TerminalView'
 import { toast } from './Toast'
@@ -37,10 +37,38 @@ export function TerminalTabs(): React.ReactElement {
 
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
+  const menuBtnRef = useRef<HTMLDivElement | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const activeTabRef = useRef<HTMLDivElement | null>(null)
 
   const visibleTerminals = terminals.filter(
     (t) => !detachedTerminalIds[t.id] && !hiddenTerminalIds[t.id]
   )
+
+  // Keep the active tab scrolled into view (e.g. when selected via a profile
+  // card while it's scrolled off-screen).
+  useEffect(() => {
+    activeTabRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [activeTerminalId, visibleTerminals.length])
+
+  // Close the jump-to-tab menu on outside click or Escape.
+  useEffect(() => {
+    if (!menuOpen) return
+    const onDown = (e: MouseEvent): void => {
+      const target = e.target as Node
+      if (menuRef.current?.contains(target) || menuBtnRef.current?.contains(target)) return
+      setMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') setMenuOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [menuOpen])
 
   const activeSplit = activeTerminalId ? splits[activeTerminalId] : undefined
 
@@ -219,6 +247,7 @@ export function TerminalTabs(): React.ReactElement {
 
   return (
     <div className="terminal-tabs">
+      <div className="terminal-tabs-list">
       {!tileMode && visibleTerminals.map((t) => {
         const profile = profiles.find(p => p.id === t.profileId)
         const isPrimary =
@@ -226,12 +255,14 @@ export function TerminalTabs(): React.ReactElement {
           (profile.container.terminalMode ?? 'smart') !== 'exec' &&
           terminals.find(other => other.profileId === t.profileId) === t
         const tabColor = profileColorVar(profile)
+        const isActive = activeTerminalId === t.id
         return (
         <div
           key={t.id}
+          ref={isActive ? activeTabRef : undefined}
           className={[
             'terminal-tab',
-            activeTerminalId === t.id ? 'active' : '',
+            isActive ? 'active' : '',
             !t.active ? 'inactive' : '',
             draggingId === t.id ? 'dragging' : '',
             dragOverId === t.id && draggingId !== t.id ? 'drag-over' : '',
@@ -302,54 +333,100 @@ export function TerminalTabs(): React.ReactElement {
         </div>
         )
       })}
+      </div>
 
-      {!tileMode && activeTerminalId && !activeSplit && (
-        <>
+      <div className="terminal-tabs-controls">
+        {!tileMode && visibleTerminals.length > 0 && (
+          <div
+            ref={menuBtnRef}
+            className={`terminal-tabs-add${menuOpen ? ' active' : ''}`}
+            title="Jump to terminal"
+            onClick={() => {
+              const r = menuBtnRef.current?.getBoundingClientRect()
+              if (r) setMenuPos({ top: r.bottom, right: Math.max(4, window.innerWidth - r.right) })
+              setMenuOpen((o) => !o)
+            }}
+          >
+            <ChevronDown size={14} />
+          </div>
+        )}
+
+        {!tileMode && activeTerminalId && !activeSplit && (
+          <>
+            <div
+              className="terminal-tabs-add"
+              onClick={() => handleSplit('vertical')}
+              title="Split vertical (new login)"
+            >
+              <SplitSquareHorizontal size={14} />
+            </div>
+            <div
+              className="terminal-tabs-add"
+              onClick={() => handleSplit('horizontal')}
+              title="Split horizontal (new login)"
+            >
+              <SplitSquareVertical size={14} />
+            </div>
+          </>
+        )}
+
+        {!tileMode && activeProfileId && (
           <div
             className="terminal-tabs-add"
-            onClick={() => handleSplit('vertical')}
-            title="Split vertical (new login)"
+            onClick={handleAddTab}
+            title="Open new terminal for active profile"
           >
-            <SplitSquareHorizontal size={14} />
+            <Plus size={14} />
           </div>
+        )}
+
+        {terminals.some((t) => !t.active) && (
           <div
             className="terminal-tabs-add"
-            onClick={() => handleSplit('horizontal')}
-            title="Split horizontal (new login)"
+            onClick={handleReconnectAll}
+            title="Reconnect all exited terminals"
           >
-            <SplitSquareVertical size={14} />
+            <RefreshCw size={14} />
           </div>
-        </>
-      )}
+        )}
 
-      {!tileMode && activeProfileId && (
-        <div
-          className="terminal-tabs-add"
-          onClick={handleAddTab}
-          title="Open new terminal for active profile"
-        >
-          <Plus size={14} />
-        </div>
-      )}
+        {terminals.length > 0 && (
+          <div
+            className={`terminal-tabs-add${tileMode ? ' active' : ''}`}
+            onClick={toggleTileMode}
+            title={tileMode ? 'Switch to tab view' : 'Switch to tile view'}
+          >
+            {tileMode ? <Rows3 size={14} /> : <LayoutGrid size={14} />}
+          </div>
+        )}
+      </div>
 
-      {terminals.some((t) => !t.active) && (
+      {menuOpen && menuPos && (
         <div
-          className="terminal-tabs-add"
-          onClick={handleReconnectAll}
-          title="Reconnect all exited terminals"
+          ref={menuRef}
+          className="tab-jump-menu"
+          style={{ top: menuPos.top, right: menuPos.right }}
         >
-          <RefreshCw size={14} />
-        </div>
-      )}
-
-      {terminals.length > 0 && (
-        <div
-          className={`terminal-tabs-add${tileMode ? ' active' : ''}`}
-          onClick={toggleTileMode}
-          title={tileMode ? 'Switch to tab view' : 'Switch to tile view'}
-          style={{ marginLeft: 'auto' }}
-        >
-          {tileMode ? <Rows3 size={14} /> : <LayoutGrid size={14} />}
+          {visibleTerminals.map((t) => {
+            const profile = profiles.find((p) => p.id === t.profileId)
+            return (
+              <div
+                key={t.id}
+                className={`tab-jump-item${activeTerminalId === t.id ? ' active' : ''}`}
+                onClick={() => { handleTabClick(t.id, t.profileId); setMenuOpen(false) }}
+              >
+                <span
+                  className="tab-jump-dot"
+                  style={{ background: `var(${profileColorVar(profile)})` }}
+                />
+                <span className={`terminal-tab-context tab-ctx-${t.context}`} title={t.context}>
+                  {t.context === 'container' ? 'c' : t.context}
+                </span>
+                <span className="tab-jump-title">{t.title}</span>
+                {t.hasUnread && <span className="terminal-tab-unread" />}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
