@@ -126,6 +126,19 @@ export function TerminalTabs(): React.ReactElement {
       addTerminal(split.session)
       removeSplit(terminalId)
     }
+    // Move selection to a neighbour when detaching the active tab, so the main
+    // view doesn't go blank (the detached terminal is filtered out of tabs).
+    if (activeTerminalId === terminalId) {
+      const idx = visibleTerminals.findIndex((t) => t.id === terminalId)
+      const remaining = visibleTerminals.filter((t) => t.id !== terminalId)
+      const next = remaining[idx] ?? remaining[idx - 1]
+      if (next) {
+        setActiveTerminal(next.id)
+        setActiveProfile(next.profileId)
+      } else {
+        setActiveTerminal(null)
+      }
+    }
     try {
       await window.api.detachTerminal(terminalId)
     } catch (err) {
@@ -311,20 +324,6 @@ export function TerminalTabs(): React.ReactElement {
           <button
             className="btn btn-icon"
             style={{ marginLeft: 4 }}
-            onClick={(e) => handleHideTab(e, t.id)}
-            title="Hide from view (keeps running; restore from its profile)"
-          >
-            <EyeOff size={11} />
-          </button>
-          <button
-            className="btn btn-icon"
-            onClick={(e) => handleDetachTab(e, t.id)}
-            title="Detach into its own window"
-          >
-            <ExternalLink size={11} />
-          </button>
-          <button
-            className="btn btn-icon"
             onClick={(e) => handleCloseTab(e, t.id)}
             title="Close terminal"
           >
@@ -336,21 +335,7 @@ export function TerminalTabs(): React.ReactElement {
       </div>
 
       <div className="terminal-tabs-controls">
-        {!tileMode && visibleTerminals.length > 0 && (
-          <div
-            ref={menuBtnRef}
-            className={`terminal-tabs-add${menuOpen ? ' active' : ''}`}
-            title="Jump to terminal"
-            onClick={() => {
-              const r = menuBtnRef.current?.getBoundingClientRect()
-              if (r) setMenuPos({ top: r.bottom, right: Math.max(4, window.innerWidth - r.right) })
-              setMenuOpen((o) => !o)
-            }}
-          >
-            <ChevronDown size={14} />
-          </div>
-        )}
-
+        {/* ── Group A: actions on the selected terminal ── */}
         {!tileMode && activeTerminalId && !activeSplit && (
           <>
             <div
@@ -370,6 +355,27 @@ export function TerminalTabs(): React.ReactElement {
           </>
         )}
 
+        {!tileMode && activeTerminalId && (
+          <>
+            <div
+              className="terminal-tabs-add"
+              onClick={(e) => handleHideTab(e, activeTerminalId)}
+              title="Hide selected terminal (restore from its profile)"
+            >
+              <EyeOff size={14} />
+            </div>
+            <div
+              className="terminal-tabs-add"
+              onClick={(e) => handleDetachTab(e, activeTerminalId)}
+              title="Detach selected terminal into its own window"
+            >
+              <ExternalLink size={14} />
+            </div>
+            <div className="terminal-tabs-sep" />
+          </>
+        )}
+
+        {/* ── Group B: global / navigation ── */}
         {!tileMode && activeProfileId && (
           <div
             className="terminal-tabs-add"
@@ -387,6 +393,21 @@ export function TerminalTabs(): React.ReactElement {
             title="Reconnect all exited terminals"
           >
             <RefreshCw size={14} />
+          </div>
+        )}
+
+        {!tileMode && visibleTerminals.length > 0 && (
+          <div
+            ref={menuBtnRef}
+            className={`terminal-tabs-add${menuOpen ? ' active' : ''}`}
+            title="Jump to terminal"
+            onClick={() => {
+              const r = menuBtnRef.current?.getBoundingClientRect()
+              if (r) setMenuPos({ top: r.bottom, right: Math.max(4, window.innerWidth - r.right) })
+              setMenuOpen((o) => !o)
+            }}
+          >
+            <ChevronDown size={14} />
           </div>
         )}
 

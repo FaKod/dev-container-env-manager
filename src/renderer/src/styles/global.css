@@ -602,6 +602,14 @@ html, body, #root {
   border-left: 1px solid var(--surface0);
 }
 
+/* Separates selected-terminal actions from global actions in the controls row. */
+.terminal-tabs-sep {
+  flex: 0 0 auto;
+  width: 1px;
+  margin: 8px 4px;
+  background: var(--surface1);
+}
+
 .terminal-tab {
   display: flex;
   align-items: center;
@@ -617,7 +625,7 @@ html, body, #root {
      list scrolls instead of collapsing the title. Basis 0 keeps width
      independent of content. */
   flex: 1 1 0;
-  min-width: 200px;
+  min-width: 150px;
   max-width: 240px;
   /* Profile color shown as a 3px inset bar on the left edge. Inset shadow
      avoids changing the tab's box size (vs. a real border). */
