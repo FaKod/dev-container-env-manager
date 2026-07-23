@@ -123,6 +123,24 @@ function createXterm(
     if (sel) navigator.clipboard.writeText(sel).catch(() => {})
   })
 
+  // Paste: prefer a clipboard image — the main process stages it into the
+  // terminal's actual environment and returns a path we inject like a real
+  // terminal would. Falls back to text when there's no image.
+  const pasteFromClipboard = (): void => {
+    window.api
+      .pasteClipboardImage(terminalId)
+      .then((staged) => {
+        if (staged?.path) {
+          onData(staged.path)
+          return
+        }
+        return navigator.clipboard.readText().then((text) => {
+          if (text) onData(text)
+        })
+      })
+      .catch(() => {})
+  }
+
   xterm.attachCustomKeyEventHandler((e: KeyboardEvent) => {
     if (e.type !== 'keydown') return true
 
@@ -139,7 +157,7 @@ function createXterm(
     }
     // Paste
     if (e.ctrlKey && e.shiftKey && e.key === 'V') {
-      navigator.clipboard.readText().then((text) => onData(text)).catch(() => {})
+      pasteFromClipboard()
       return false
     }
     // Font size: Ctrl+= / Ctrl++ to increase ('+' requires Shift on most keyboards)
@@ -176,7 +194,32 @@ function createXterm(
   // Right-click pastes from clipboard
   xterm.element?.addEventListener('contextmenu', (e) => {
     e.preventDefault()
-    navigator.clipboard.readText().then((text) => onData(text)).catch(() => {})
+    pasteFromClipboard()
+  })
+
+  // Drag-and-drop files onto the terminal: stage each into the terminal's
+  // environment (host / container / remote) and inject the resulting path(s),
+  // like a real terminal does. Only intercept file drags so in-terminal text
+  // selection drags are untouched.
+  const isFileDrag = (e: DragEvent): boolean =>
+    Array.from(e.dataTransfer?.types ?? []).includes('Files')
+  xterm.element?.addEventListener('dragover', (e) => {
+    if (!isFileDrag(e)) return
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+    e.preventDefault() // required for the drop event to fire (and stops file:// navigation)
+  })
+  xterm.element?.addEventListener('drop', (e) => {
+    const files = Array.from(e.dataTransfer?.files ?? [])
+    if (files.length === 0) return
+    e.preventDefault()
+    const hostPaths = files.map((f) => window.api.getPathForFile(f)).filter(Boolean)
+    if (hostPaths.length === 0) return
+    window.api
+      .stageDroppedFiles(terminalId, hostPaths)
+      .then((paths) => {
+        if (paths.length) onData(paths.join(' '))
+      })
+      .catch(() => {})
   })
 
   const inst = { xterm, fitAddon, searchAddon, mouseModeObserver }

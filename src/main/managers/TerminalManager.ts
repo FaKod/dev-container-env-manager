@@ -1,5 +1,8 @@
 import { EventEmitter } from 'events'
 import { exec } from 'child_process'
+import { writeFileSync, unlink } from 'fs'
+import { tmpdir } from 'os'
+import { basename, join } from 'path'
 import { promisify } from 'util'
 import * as pty from 'node-pty'
 import { v4 as uuidv4 } from 'uuid'
@@ -12,6 +15,9 @@ const execAsync = promisify(exec)
 interface TerminalEntry {
   session: TerminalSession
   pty: pty.IPty
+  // Profile the terminal was created from — captured so stageImage knows where
+  // the terminal's process actually runs (host / local docker / ssh / remote docker).
+  profile: Profile
   // Window that currently receives this terminal's data/exit events.
   // Swapped by setTargetWindow when a terminal is detached/attached.
   targetWindow: BrowserWindow
@@ -21,6 +27,7 @@ export class TerminalManager extends EventEmitter {
   private terminals = new Map<string, TerminalEntry>()
   private logger: EventLogManager
   private suppressAutoDisconnect = new Set<string>()
+  private imgCounter = 0
 
   constructor(logger: EventLogManager) {
     super()
@@ -59,7 +66,7 @@ export class TerminalManager extends EventEmitter {
       active: true
     }
 
-    const entry: TerminalEntry = { session, pty: ptyProcess, targetWindow: mainWindow }
+    const entry: TerminalEntry = { session, pty: ptyProcess, profile, targetWindow: mainWindow }
     this.terminals.set(id, entry)
 
     const safeSend = (channel: string, ...args: unknown[]): void => {
@@ -290,6 +297,101 @@ export class TerminalManager extends EventEmitter {
 
   write(terminalId: string, data: string): void {
     this.terminals.get(terminalId)?.pty.write(data)
+  }
+
+  /** POSIX single-quote a string so it can be safely interpolated into a shell command. */
+  private shq(s: string): string {
+    return `'${s.replace(/'/g, "'\\''")}'`
+  }
+
+  /** Reduce a dropped file's name to a shell-safe basename for the target /tmp path. */
+  private safeName(name: string): string {
+    const cleaned = name.replace(/[^A-Za-z0-9._-]/g, '_').replace(/^\.+/, '')
+    return cleaned || `drop-${Date.now()}-${this.imgCounter++}`
+  }
+
+  /**
+   * Copy a host file into the environment where this terminal actually runs and
+   * return the path its process will see, so the renderer can inject it at the
+   * prompt like a real terminal's paste / drag-drop. Mirrors buildCommand's
+   * branching (host / local docker / ssh / remote docker). `targetPath` must be
+   * a shell-safe absolute path (callers sanitize it). Never deletes `hostPath`.
+   * Returns null on failure.
+   */
+  private async placeInEnvironment(
+    entry: TerminalEntry,
+    hostPath: string,
+    targetPath: string
+  ): Promise<{ path: string } | null> {
+    const { profile, session } = entry
+    // A terminal targets a container only when it was opened in 'container' context.
+    const hasContainer = !!profile.container && session.context === 'container'
+
+    try {
+      // Local shell (host) — the file is already reachable at its own path.
+      if ((profile.local && !hasContainer) || (!profile.local && session.context === 'local')) {
+        return { path: hostPath }
+      }
+
+      // Local container — copy the host file straight in.
+      if (profile.local && hasContainer) {
+        const dest = `${profile.container!.name}:${targetPath}`
+        await execAsync(`docker cp ${this.shq(hostPath)} ${this.shq(dest)}`, { timeout: 15000 })
+        return { path: targetPath }
+      }
+
+      // Remote — pipe the bytes over ssh (reusing the same opts buildCommand uses).
+      const sshTarget = profile.ssh.user ? `${profile.ssh.user}@${profile.ssh.host}` : profile.ssh.host
+      const opts = this.buildCommonSSHOpts(profile).join(' ')
+      const remote = hasContainer
+        ? // Remote container: land in remote /tmp, docker cp in, drop the remote temp.
+          `cat > ${targetPath} && docker cp ${targetPath} ${profile.container!.name}:${targetPath} && rm -f ${targetPath}`
+        : `cat > ${targetPath}`
+      await execAsync(
+        `ssh ${opts} ${this.shq(sshTarget)} ${this.shq(remote)} < ${this.shq(hostPath)}`,
+        { timeout: 30000 }
+      )
+      return { path: targetPath }
+    } catch (err) {
+      this.logger.warn('TerminalManager', `Failed to stage file for terminal: ${String(err)}`, profile.id)
+      return null
+    }
+  }
+
+  /**
+   * Stage a clipboard image (raw PNG bytes) into the terminal's environment and
+   * return the path its process will see. Returns null if the terminal is gone
+   * or staging fails (renderer then falls back to a text paste).
+   */
+  async stageImage(terminalId: string, png: Buffer): Promise<{ path: string } | null> {
+    const entry = this.terminals.get(terminalId)
+    if (!entry) return null
+
+    const file = `devenv-paste-${Date.now()}-${this.imgCounter++}.png`
+    const hostPath = join(tmpdir(), file)
+    try {
+      writeFileSync(hostPath, png)
+    } catch (err) {
+      this.logger.warn('TerminalManager', `Failed to write clipboard image: ${String(err)}`, entry.profile.id)
+      return null
+    }
+
+    const result = await this.placeInEnvironment(entry, hostPath, `/tmp/${file}`)
+    // If the file was copied into a container/remote, drop our host temp copy;
+    // for a local shell the injected path IS hostPath, so keep it.
+    if (result && result.path !== hostPath) unlink(hostPath, () => {})
+    return result
+  }
+
+  /**
+   * Stage a dropped host file into the terminal's environment (preserving a
+   * sanitized basename) and return the path its process will see. The host file
+   * is the user's own and is never deleted.
+   */
+  async stageFile(terminalId: string, hostPath: string): Promise<{ path: string } | null> {
+    const entry = this.terminals.get(terminalId)
+    if (!entry) return null
+    return this.placeInEnvironment(entry, hostPath, `/tmp/${this.safeName(basename(hostPath))}`)
   }
 
   resize(terminalId: string, cols: number, rows: number): void {

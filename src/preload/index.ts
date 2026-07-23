@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type {
   Profile,
   Project,
@@ -84,6 +84,16 @@ const api = {
 
   terminalInput: (terminalId: string, data: string): Promise<void> =>
     ipcRenderer.invoke('terminal:input', terminalId, data),
+
+  pasteClipboardImage: (terminalId: string): Promise<{ path: string } | null> =>
+    ipcRenderer.invoke('terminal:pasteImage', terminalId),
+
+  // Resolve a dropped File to its absolute host path (File.path is gone in
+  // modern Electron — webUtils is the supported replacement).
+  getPathForFile: (file: File): string => webUtils.getPathForFile(file),
+
+  stageDroppedFiles: (terminalId: string, hostPaths: string[]): Promise<string[]> =>
+    ipcRenderer.invoke('terminal:dropFiles', terminalId, hostPaths),
 
   terminalResize: (terminalId: string, cols: number, rows: number): Promise<void> =>
     ipcRenderer.invoke('terminal:resize', terminalId, cols, rows),

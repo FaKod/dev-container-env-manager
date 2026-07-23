@@ -1,4 +1,4 @@
-import { ipcMain, dialog, app, shell } from 'electron'
+import { ipcMain, dialog, app, shell, clipboard } from 'electron'
 import { writeFileSync } from 'fs'
 import type { BrowserWindow } from 'electron'
 import type { ProfileManager } from './managers/ProfileManager'
@@ -208,6 +208,25 @@ export function setupIpcHandlers(opts: SetupOptions): void {
 
   ipcMain.handle('terminal:input', (_e, terminalId: string, data: string) => {
     terminalManager.write(terminalId, data)
+  })
+
+  // Stage a clipboard image into the terminal's environment and return the path
+  // its process will see. Returns null when the clipboard holds no image.
+  ipcMain.handle('terminal:pasteImage', async (_e, terminalId: string) => {
+    const img = clipboard.readImage()
+    if (img.isEmpty()) return null
+    return terminalManager.stageImage(terminalId, img.toPNG())
+  })
+
+  // Stage files dropped onto the terminal into its environment; returns the
+  // in-terminal paths (in input order, skipping any that failed to stage).
+  ipcMain.handle('terminal:dropFiles', async (_e, terminalId: string, hostPaths: string[]) => {
+    const staged: string[] = []
+    for (const hostPath of hostPaths) {
+      const result = await terminalManager.stageFile(terminalId, hostPath)
+      if (result?.path) staged.push(result.path)
+    }
+    return staged
   })
 
   ipcMain.handle('terminal:resize', (_e, terminalId: string, cols: number, rows: number) => {
