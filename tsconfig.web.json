@@ -8,12 +8,7 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "jsx": "react-jsx",
-    "baseUrl": ".",
-    "paths": {
-      "@renderer/*": ["src/renderer/src/*"],
-      "@shared/*": ["src/shared/*"]
-    }
+    "jsx": "react-jsx"
   },
   "include": ["src/renderer/src/**/*", "src/shared/**/*"]
 }

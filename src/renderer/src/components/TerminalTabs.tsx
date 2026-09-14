@@ -338,7 +338,14 @@ export function TerminalTabs(): React.ReactElement {
             {t.context === 'container' ? 'c' : t.context}
           </span>
           {isPrimary && (
-            <Anchor size={10} style={{ flexShrink: 0, opacity: 0.6 }} title="Primary terminal — closing this will stop the container" />
+            // lucide icons drop unknown props, so `title` on the icon itself
+            // rendered no tooltip at all — it has to go on a wrapping element.
+            <span
+              style={{ display: 'inline-flex', flexShrink: 0, opacity: 0.6 }}
+              title="Primary terminal — closing this will stop the container"
+            >
+              <Anchor size={10} />
+            </span>
           )}
           <span className="terminal-tab-title">{t.title}</span>
           {t.hasUnread && <span className="terminal-tab-unread" />}

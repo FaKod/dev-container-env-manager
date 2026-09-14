@@ -221,7 +221,9 @@ export function ProfileEditor(): React.ReactElement {
 interface TabProps {
   draft: DraftProfile
   onChange: <K extends keyof DraftProfile>(key: K, value: DraftProfile[K]) => void
-  firstInputRef?: React.RefObject<HTMLInputElement>
+  // React 19's useRef<T>(null) yields RefObject<T | null>, so the nullable
+  // element type has to be spelled out here for the ref to be assignable.
+  firstInputRef?: React.RefObject<HTMLInputElement | null>
 }
 
 function GeneralTab({ draft, onChange, firstInputRef }: TabProps): React.ReactElement {

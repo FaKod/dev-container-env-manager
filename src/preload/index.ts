@@ -12,7 +12,9 @@ import type {
 
 // ─── Type-safe IPC bridge ─────────────────────────────────────────────────────
 
-const api = {
+// Exported for its type only: the renderer declares `window.api` from `Api`
+// (see src/renderer/src/env.d.ts) so both sides of the bridge stay in step.
+export const api = {
   // ── Profiles ──────────────────────────────────────────────────────────────
   getProfiles: (): Promise<Profile[]> => ipcRenderer.invoke('profile:list'),
 
@@ -250,9 +252,12 @@ const api = {
 
 contextBridge.exposeInMainWorld('api', api)
 
-// Declare global type for the renderer
-declare global {
-  interface Window {
-    api: typeof api
-  }
-}
+/**
+ * Shape of the bridge as the renderer sees it.
+ *
+ * The matching `declare global` lives in the renderer's env.d.ts rather than
+ * here: this file is not part of the renderer's tsconfig, so a declaration in
+ * it left `window.api` as an error in every renderer module — and every call
+ * through it implicitly `any`.
+ */
+export type Api = typeof api
