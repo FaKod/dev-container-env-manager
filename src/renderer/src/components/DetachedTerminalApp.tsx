@@ -3,7 +3,6 @@ import { Anchor } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { TerminalPane } from './TerminalView'
 import { ToastContainer, toast } from './Toast'
-import type { TerminalSession } from '../../../shared/types'
 
 interface Props {
   terminalId: string
@@ -15,8 +14,10 @@ export function DetachedTerminalApp({ terminalId }: Props): React.ReactElement {
   const sessionTitle = useAppStore(
     (s) => s.terminals.find((t) => t.id === terminalId)?.title ?? ''
   )
+  // Read from the store rather than local state: reconnecting a restored
+  // terminal replaces the session there, and this window has to follow.
+  const session = useAppStore((s) => s.terminals.find((t) => t.id === terminalId) ?? null)
 
-  const [session, setSession] = useState<TerminalSession | null>(null)
   const [exited, setExited] = useState(false)
 
   // Apply theme to documentElement so xterm picks up the right palette
@@ -47,7 +48,6 @@ export function DetachedTerminalApp({ terminalId }: Props): React.ReactElement {
         // Seed the store with the single terminal we're hosting so TerminalPane
         // (and its title/unread helpers) can read it via useAppStore.
         useAppStore.setState({ terminals: [s], activeTerminalId: s.id })
-        setSession(s)
       })
       .catch((err) => toast(`Failed to load terminal: ${err}`))
     return () => { cancelled = true }

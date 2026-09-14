@@ -10,6 +10,7 @@ import { ProfileEditor } from './components/ProfileEditor'
 import { ToastContainer, toast } from './components/Toast'
 import { ConfirmModal } from './components/ConfirmModal'
 import { useResizablePane } from './hooks/useResizablePane'
+import { hydrateFromLastSession, startSessionPersistence } from './sessionPersistence'
 
 export default function App(): React.ReactElement {
   const showProfileEditor = useAppStore((s) => s.showProfileEditor)
@@ -50,6 +51,32 @@ export default function App(): React.ReactElement {
   useEffect(() => {
     window.api.getProfiles().then(setProfiles).catch((err) => toast(`Failed to load profiles: ${err}`))
     window.api.getProjects().then(setProjects).catch((err) => toast(`Failed to load projects: ${err}`))
+  }, [])
+
+  // ── Restore last session's terminals, then keep mirroring the workspace ───────
+  // Restored terminals come back as stubs: the tabs and detached windows are
+  // rebuilt, but no process starts until the user clicks Reconnect.
+  useEffect(() => {
+    let stopPersisting: (() => void) | undefined
+    let cancelled = false
+
+    hydrateFromLastSession()
+      .then((count) => {
+        if (count > 0) {
+          toast(`Restored ${count} terminal${count > 1 ? 's' : ''} from your last session.`)
+        }
+      })
+      .catch((err) => toast(`Failed to restore last session: ${err}`))
+      .finally(() => {
+        // Start mirroring only after the restore lands, so an empty store is
+        // never written over the saved session.
+        if (!cancelled) stopPersisting = startSessionPersistence()
+      })
+
+    return () => {
+      cancelled = true
+      stopPersisting?.()
+    }
   }, [])
 
   // ── Subscribe to push events ──────────────────────────────────────────────────

@@ -144,6 +144,39 @@ export interface TerminalSession {
   title: string
   active: boolean
   hasUnread?: boolean
+  /**
+   * Set on sessions rebuilt from the previous run: the tab/window exists but no
+   * PTY is behind it yet. PTYs die with the app, so a restored session is only
+   * a stub until the user reconnects it — see SessionManager / activateStub.
+   */
+  restored?: boolean
+}
+
+// ─── Session persistence ──────────────────────────────────────────────────────
+
+export interface WindowBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/** One terminal as written to disk. Deliberately free of any PTY handle. */
+export interface PersistedTerminal {
+  id: string
+  profileId: string
+  context: TerminalContext
+  title: string
+  detached?: boolean
+  hidden?: boolean
+  /** Last known frame of the detached window hosting this terminal. */
+  bounds?: WindowBounds
+}
+
+export interface PersistedSession {
+  terminals: PersistedTerminal[]
+  activeTerminalId: string | null
+  activeProfileId: string | null
 }
 
 // ─── Logs ─────────────────────────────────────────────────────────────────────

@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react'
-import { Terminal as TerminalIcon, ChevronUp, ChevronDown, X as XIcon } from 'lucide-react'
+import { Terminal as TerminalIcon, ChevronUp, ChevronDown, X as XIcon, RefreshCw } from 'lucide-react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 import { WrappedLinkProvider } from './wrappedLinkProvider'
 import { useAppStore } from '../store/useAppStore'
+import { toast } from './Toast'
 import type { TerminalSession } from '../../../shared/types'
 
 function xtermTheme(mode: 'dark' | 'light'): object {
@@ -235,7 +236,70 @@ interface TerminalPaneProps {
   focused: boolean
 }
 
-export function TerminalPane({ session, visible, focused }: TerminalPaneProps): React.ReactElement {
+/**
+ * Renders a terminal restored from the previous run. There is no process behind
+ * it — PTYs die with the app — so instead of an xterm this offers to launch the
+ * profile and start a fresh shell under the same terminal id.
+ */
+function RestoredTerminalPane({
+  session,
+  visible
+}: {
+  session: TerminalSession
+  visible: boolean
+}): React.ReactElement {
+  const setTerminalSession = useAppStore((s) => s.setTerminalSession)
+  const setFocusedTerminal = useAppStore((s) => s.setFocusedTerminal)
+  const [busy, setBusy] = useState(false)
+
+  async function handleReconnect(): Promise<void> {
+    if (busy) return
+    setBusy(true)
+    try {
+      // Launches the profile (SSH tunnel + container) and spawns the process.
+      const live = await window.api.reconnectTerminal(session.id, 120, 36)
+      // Swapping the session flips this pane to a live one. The id is unchanged,
+      // so tab order, splits and any detached window hosting it stay valid.
+      setTerminalSession(live)
+      setFocusedTerminal(live.id)
+    } catch (err) {
+      toast(`Failed to reconnect "${session.title}": ${err}`)
+      setBusy(false) // on success this component unmounts, so only reset here
+    }
+  }
+
+  const what = session.context === 'local' ? 'shell' : `${session.context} session`
+
+  return (
+    <div className={`terminal-wrapper${visible ? ' visible' : ''}`}>
+      <div className="terminal-restored">
+        <RefreshCw
+          size={30}
+          className={`terminal-restored-icon${busy ? ' spinning' : ''}`}
+        />
+        <h3>{session.title}</h3>
+        <p>
+          Restored from your last session — the original {what} ended when the app closed.
+        </p>
+        <button className="btn btn-primary" onClick={handleReconnect} disabled={busy}>
+          {busy ? 'Reconnecting…' : 'Reconnect'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export function TerminalPane(props: TerminalPaneProps): React.ReactElement {
+  // A restored stub must not build an xterm — there is nothing to attach it to.
+  // Reconnecting clears the flag, and the component-type change remounts this
+  // position as a live pane that creates its xterm on mount.
+  if (props.session.restored) {
+    return <RestoredTerminalPane session={props.session} visible={props.visible} />
+  }
+  return <LiveTerminalPane {...props} />
+}
+
+function LiveTerminalPane({ session, visible, focused }: TerminalPaneProps): React.ReactElement {
   const markTerminalInactive = useAppStore((s) => s.markTerminalInactive)
   const markTerminalUnread = useAppStore((s) => s.markTerminalUnread)
   const markTerminalRead = useAppStore((s) => s.markTerminalRead)

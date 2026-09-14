@@ -34,6 +34,7 @@ export function TerminalTabs(): React.ReactElement {
   const setSplitSession = useAppStore((s) => s.setSplitSession)
   const removeSplit = useAppStore((s) => s.removeSplit)
   const reorderTerminals = useAppStore((s) => s.reorderTerminals)
+  const setTerminalSession = useAppStore((s) => s.setTerminalSession)
 
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
@@ -186,9 +187,27 @@ export function TerminalTabs(): React.ReactElement {
   }
 
   async function handleReconnectAll(): Promise<void> {
-    const exited = terminals.filter(
+    const inactive = terminals.filter(
       (t) => !t.active && !detachedTerminalIds[t.id] && !hiddenTerminalIds[t.id]
     )
+    if (inactive.length === 0) return
+
+    // Terminals restored from the last run reconnect through their own path:
+    // it launches the profile itself and reuses the existing terminal id, so
+    // there is no readiness check to do and no tab to swap out.
+    let firstRestoredId: string | null = null
+    for (const t of inactive.filter((t) => t.restored)) {
+      try {
+        const live = await window.api.reconnectTerminal(t.id, 120, 36)
+        setTerminalSession(live)
+        if (firstRestoredId === null) firstRestoredId = live.id
+      } catch (err) {
+        toast(`Failed to reconnect "${t.title}": ${err}`)
+      }
+    }
+    if (firstRestoredId) setActiveTerminal(firstRestoredId)
+
+    const exited = inactive.filter((t) => !t.restored)
     if (exited.length === 0) return
 
     function isReady(t: (typeof exited)[0]): boolean {
@@ -221,7 +240,9 @@ export function TerminalTabs(): React.ReactElement {
         // profileTerminalsEmpty auto-disconnect never fires between destroy and create.
         session = await window.api.createTerminal(t.profileId, t.context, 120, 36)
       } catch (err) {
-        toast.error(`Failed to restart terminal: ${err}`)
+        // `toast` has no `.error` member — calling it would throw and abort the
+        // loop instead of showing the failure and moving to the next terminal.
+        toast(`Failed to restart terminal: ${err}`)
         continue // leave the dead tab in place
       }
       addTerminal(session)
@@ -390,7 +411,7 @@ export function TerminalTabs(): React.ReactElement {
           <div
             className="terminal-tabs-add"
             onClick={handleReconnectAll}
-            title="Reconnect all exited terminals"
+            title="Reconnect all exited and restored terminals"
           >
             <RefreshCw size={14} />
           </div>

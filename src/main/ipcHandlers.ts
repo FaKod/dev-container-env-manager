@@ -6,7 +6,13 @@ import type { ConnectionManager } from './managers/ConnectionManager'
 import type { TerminalManager } from './managers/TerminalManager'
 import type { ContainerManager } from './managers/ContainerManager'
 import type { EventLogManager } from './managers/EventLogManager'
-import type { TerminalContext, Profile } from '../shared/types'
+import type { SessionManager } from './managers/SessionManager'
+import type {
+  TerminalContext,
+  Profile,
+  PersistedSession,
+  WindowBounds
+} from '../shared/types'
 
 interface SetupOptions {
   mainWindow: BrowserWindow
@@ -15,10 +21,16 @@ interface SetupOptions {
   terminalManager: TerminalManager
   containerManager: ContainerManager
   eventLogManager: EventLogManager
-  createDetachedTerminalWindow: (terminalId: string) => BrowserWindow
+  sessionManager: SessionManager
+  createDetachedTerminalWindow: (terminalId: string, bounds?: WindowBounds) => BrowserWindow
 }
 
-export function setupIpcHandlers(opts: SetupOptions): void {
+export interface IpcHandles {
+  /** Rebuild the previous run's detached terminal windows. */
+  restoreDetachedWindows: (session: PersistedSession) => Promise<void>
+}
+
+export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
   const {
     mainWindow,
     profileManager,
@@ -26,6 +38,7 @@ export function setupIpcHandlers(opts: SetupOptions): void {
     terminalManager,
     containerManager,
     eventLogManager,
+    sessionManager,
     createDetachedTerminalWindow
   } = opts
 
@@ -35,6 +48,10 @@ export function setupIpcHandlers(opts: SetupOptions): void {
   // Marker set so we can distinguish a user-driven close (auto re-attach) from
   // the close we trigger ourselves after an explicit attach IPC.
   const closingAfterAttach = new Set<string>()
+  // On quit every window closes, which would otherwise look like the user
+  // re-attaching each detached terminal and get saved as "not detached".
+  let quitting = false
+  app.on('before-quit', () => { quitting = true })
 
   ipcMain.handle('shell:openExternal', (_e, url: string) => {
     if (!url.startsWith('https://') && !url.startsWith('http://')) return
@@ -110,10 +127,11 @@ export function setupIpcHandlers(opts: SetupOptions): void {
 
   // ─── Connections ───────────────────────────────────────────────────────────
 
-  // Full launch: SSH tunnel + container start/attach (per policy)
-  ipcMain.handle('connection:launch', async (_e, profileId: string) => {
-    const profile = profileManager.getById(profileId)
-    if (!profile) throw new Error(`Profile ${profileId} not found`)
+  // Full launch: SSH tunnel + container start/attach (per policy).
+  // Extracted from the IPC handler so reconnecting a restored terminal can run
+  // the identical sequence rather than a second, drifting copy of it.
+  async function launchProfile(profile: Profile): Promise<void> {
+    const profileId = profile.id
 
     // 1. Start SSH tunnel (port forwards)
     await connectionManager.connect(profile, mainWindow)
@@ -172,6 +190,12 @@ export function setupIpcHandlers(opts: SetupOptions): void {
       const finalStatus = await containerManager.getStatus(profile)
       mainWindow.webContents.send('container:stateChanged', profileId, finalStatus)
     }
+  }
+
+  ipcMain.handle('connection:launch', async (_e, profileId: string) => {
+    const profile = profileManager.getById(profileId)
+    if (!profile) throw new Error(`Profile ${profileId} not found`)
+    await launchProfile(profile)
   })
 
   ipcMain.handle('connection:connect', async (_e, profileId: string) => {
@@ -235,14 +259,54 @@ export function setupIpcHandlers(opts: SetupOptions): void {
 
   ipcMain.handle('terminal:sessions', () => terminalManager.getSessions())
 
+  // Bring a terminal restored from the previous run back to life: launch its
+  // profile (SSH tunnel + container), then start a process behind the existing
+  // stub. The terminal id is preserved, so tabs, splits and any detached window
+  // already pointing at it stay valid.
+  ipcMain.handle(
+    'terminal:reconnect',
+    async (_e, terminalId: string, cols: number, rows: number) => {
+      const session = terminalManager.getSession(terminalId)
+      if (!session) throw new Error(`Terminal ${terminalId} not found`)
+
+      const profile = profileManager.getById(session.profileId)
+      if (!profile) throw new Error(`Profile ${session.profileId} no longer exists`)
+
+      if (session.context !== 'local') await launchProfile(profile)
+      return terminalManager.activateStub(terminalId, profile, cols, rows)
+    }
+  )
+
+  // ─── Session persistence ───────────────────────────────────────────────────
+
+  // Detached-window frames live here in main, not in the renderer, so the
+  // SessionManager reads them straight off the live windows at write time.
+  sessionManager.setBoundsProvider((terminalId) => {
+    const win = detachedWindows.get(terminalId)
+    if (!win || win.isDestroyed()) return undefined
+    return win.getBounds()
+  })
+
+  ipcMain.handle('session:restored', () => sessionManager.getRestored())
+
+  // Fire-and-forget (`send`, not `invoke`): the renderer also pushes a final
+  // snapshot from beforeunload, where awaiting a reply is not an option.
+  ipcMain.on('session:save', (_e, snapshot: PersistedSession) => {
+    sessionManager.save(snapshot)
+  })
+
   // ─── Detached terminals ────────────────────────────────────────────────────
 
-  ipcMain.handle('terminal:detach', async (_e, terminalId: string) => {
+  /**
+   * Open a terminal in its own window and take ownership of its PTY output.
+   * Shared by the detach IPC and by session restore, so a window rebuilt at
+   * startup behaves exactly like one the user detached by hand — including
+   * re-attaching to the main window if they simply close it.
+   */
+  async function openDetached(terminalId: string, bounds?: WindowBounds): Promise<void> {
     if (detachedWindows.has(terminalId)) return
-    const session = terminalManager.getSession(terminalId)
-    if (!session) throw new Error(`Terminal ${terminalId} not found`)
 
-    const win = createDetachedTerminalWindow(terminalId)
+    const win = createDetachedTerminalWindow(terminalId, bounds)
     detachedWindows.set(terminalId, win)
 
     // Wait for the window's renderer to be ready before retargeting PTY data —
@@ -257,6 +321,16 @@ export function setupIpcHandlers(opts: SetupOptions): void {
 
     terminalManager.setTargetWindow(terminalId, win)
 
+    // Track the frame as the user moves/resizes it so the window can be put
+    // back in the same place next run. 'move'/'resize' fire continuously during
+    // a drag, but this only writes to a map — the disk write happens on save.
+    const rememberFrame = (): void => {
+      if (!win.isDestroyed()) sessionManager.rememberBounds(terminalId, win.getBounds())
+    }
+    win.on('move', rememberFrame)
+    win.on('resize', rememberFrame)
+    rememberFrame()
+
     // Tell the main window to drop its xterm instance + hide the tab.
     try {
       if (!mainWindow.isDestroyed()) {
@@ -268,6 +342,8 @@ export function setupIpcHandlers(opts: SetupOptions): void {
     // Attach), re-attach the terminal to the main window — less destructive.
     win.on('closed', () => {
       detachedWindows.delete(terminalId)
+      // During shutdown the terminal stays "detached" for next run's restore.
+      if (quitting) return
       if (closingAfterAttach.delete(terminalId)) return
       if (!terminalManager.getSession(terminalId)) return // already destroyed
       terminalManager.setTargetWindow(terminalId, mainWindow)
@@ -278,8 +354,39 @@ export function setupIpcHandlers(opts: SetupOptions): void {
       } catch { /* destroyed */ }
     })
 
-    eventLogManager.info('IpcHandlers', `Detached terminal ${terminalId}`, session.profileId)
+    eventLogManager.info(
+      'IpcHandlers',
+      `Detached terminal ${terminalId}`,
+      terminalManager.getSession(terminalId)?.profileId
+    )
+  }
+
+  ipcMain.handle('terminal:detach', async (_e, terminalId: string) => {
+    if (!terminalManager.getSession(terminalId)) {
+      throw new Error(`Terminal ${terminalId} not found`)
+    }
+    await openDetached(terminalId)
   })
+
+  /**
+   * Rebuild the detached windows from the previous run. Called once at startup,
+   * after the restored stubs are registered with the TerminalManager.
+   */
+  async function restoreDetachedWindows(session: PersistedSession): Promise<void> {
+    for (const t of session.terminals) {
+      if (!t.detached) continue
+      if (!terminalManager.getSession(t.id)) continue // stub was skipped (profile gone)
+      try {
+        await openDetached(t.id, t.bounds)
+      } catch (err) {
+        eventLogManager.warn(
+          'IpcHandlers',
+          `Failed to restore detached window for terminal ${t.id}: ${err}`,
+          t.profileId
+        )
+      }
+    }
+  }
 
   ipcMain.handle('terminal:attach', (_e, terminalId: string) => {
     const win = detachedWindows.get(terminalId)
@@ -454,4 +561,6 @@ export function setupIpcHandlers(opts: SetupOptions): void {
       }
     } catch { /* window destroyed between check and send */ }
   })
+
+  return { restoreDetachedWindows }
 }

@@ -7,14 +7,21 @@ import { promisify } from 'util'
 import * as pty from 'node-pty'
 import { v4 as uuidv4 } from 'uuid'
 import { BrowserWindow } from 'electron'
-import type { Profile, TerminalContext, TerminalSession } from '../../shared/types'
+import type {
+  PersistedTerminal,
+  Profile,
+  TerminalContext,
+  TerminalSession
+} from '../../shared/types'
 import type { EventLogManager } from './EventLogManager'
 
 const execAsync = promisify(exec)
 
 interface TerminalEntry {
   session: TerminalSession
-  pty: pty.IPty
+  // Null while the terminal is a restored stub — the tab/window exists but no
+  // process is behind it yet. activateStub() fills this in on reconnect.
+  pty: pty.IPty | null
   // Profile the terminal was created from — captured so stageImage knows where
   // the terminal's process actually runs (host / local docker / ssh / remote docker).
   profile: Profile
@@ -43,7 +50,100 @@ export class TerminalManager extends EventEmitter {
   ): Promise<TerminalSession> {
     const id = uuidv4()
 
-    const { command, args } = await this.buildCommand(profile, context)
+    const session: TerminalSession = {
+      id,
+      profileId: profile.id,
+      context,
+      title: this.buildTitle(profile, context),
+      active: false
+    }
+
+    const entry: TerminalEntry = { session, pty: null, profile, targetWindow: mainWindow }
+    this.terminals.set(id, entry)
+
+    try {
+      await this.spawn(entry, cols, rows)
+    } catch (err) {
+      // Never leave a process-less entry behind on a failed spawn — it would
+      // masquerade as a restored stub and offer a bogus Reconnect button.
+      this.terminals.delete(id)
+      throw err
+    }
+
+    this.logger.info('TerminalManager', `Created terminal ${id} (${context})`, profile.id)
+    return session
+  }
+
+  /**
+   * Register a terminal from the previous run without starting a process. The
+   * session shows up in getSessions() so tabs and detached windows can be
+   * rebuilt, but it stays inert until activateStub() runs.
+   */
+  restoreStub(
+    profile: Profile,
+    persisted: PersistedTerminal,
+    targetWindow: BrowserWindow
+  ): TerminalSession {
+    const session: TerminalSession = {
+      id: persisted.id,
+      profileId: profile.id,
+      context: persisted.context,
+      title: persisted.title || this.buildTitle(profile, persisted.context),
+      active: false,
+      restored: true
+    }
+    this.terminals.set(session.id, { session, pty: null, profile, targetWindow })
+    this.logger.debug(
+      'TerminalManager',
+      `Restored terminal stub ${session.id} (${session.context})`,
+      profile.id
+    )
+    return session
+  }
+
+  /**
+   * Give a restored stub a real process, keeping its id so tab order, splits and
+   * any detached window hosting it all stay valid. `profile` is re-read by the
+   * caller so edits made since the last run take effect.
+   */
+  async activateStub(
+    terminalId: string,
+    profile: Profile,
+    cols = 80,
+    rows = 24
+  ): Promise<TerminalSession> {
+    const entry = this.terminals.get(terminalId)
+    if (!entry) throw new Error(`Terminal ${terminalId} not found`)
+    if (entry.pty) return entry.session // already live — nothing to do
+
+    entry.profile = profile
+    await this.spawn(entry, cols, rows)
+    entry.session.restored = false
+    // The previous run's title may have been an OSC title from a long-dead
+    // shell; start from the profile name and let the new shell retitle itself.
+    entry.session.title = this.buildTitle(profile, entry.session.context)
+
+    this.logger.info(
+      'TerminalManager',
+      `Reconnected restored terminal ${terminalId} (${entry.session.context})`,
+      profile.id
+    )
+    return entry.session
+  }
+
+  /**
+   * Start the PTY for an already-registered entry and wire its data/exit events.
+   * Shared by fresh terminals and reconnected stubs.
+   */
+  private async spawn(entry: TerminalEntry, cols: number, rows: number): Promise<void> {
+    const { profile, session } = entry
+    const id = session.id
+
+    // buildCommand's attach-vs-exec decision counts the *other* active terminals
+    // on this profile, so this session must still read as inactive while it runs.
+    session.active = false
+
+    const { command, args } = await this.buildCommand(profile, session.context)
     this.logger.debug(
       'TerminalManager',
       `Spawning terminal [mode=${profile.container?.terminalMode ?? 'smart'}]: ${command} ${args.join(' ')}`,
@@ -58,16 +158,8 @@ export class TerminalManager extends EventEmitter {
       env: { ...process.env } as Record<string, string>
     })
 
-    const session: TerminalSession = {
-      id,
-      profileId: profile.id,
-      context,
-      title: this.buildTitle(profile, context),
-      active: true
-    }
-
-    const entry: TerminalEntry = { session, pty: ptyProcess, profile, targetWindow: mainWindow }
-    this.terminals.set(id, entry)
+    entry.pty = ptyProcess
+    session.active = true
 
     const safeSend = (channel: string, ...args: unknown[]): void => {
       // Read target window per-call so detach/attach retargeting takes effect
@@ -112,9 +204,6 @@ export class TerminalManager extends EventEmitter {
         this.checkAutoDisconnect(e.session.profileId)
       }
     })
-
-    this.logger.info('TerminalManager', `Created terminal ${id} (${context})`, profile.id)
-    return session
   }
 
   private async buildCommand(
@@ -296,7 +385,9 @@ export class TerminalManager extends EventEmitter {
   }
 
   write(terminalId: string, data: string): void {
-    this.terminals.get(terminalId)?.pty.write(data)
+    // A restored stub has no process yet — input is silently dropped rather
+    // than queued, since the shell it was typed for no longer exists.
+    this.terminals.get(terminalId)?.pty?.write(data)
   }
 
   /** POSIX single-quote a string so it can be safely interpolated into a shell command. */
@@ -365,7 +456,7 @@ export class TerminalManager extends EventEmitter {
    */
   async stageImage(terminalId: string, png: Buffer): Promise<{ path: string } | null> {
     const entry = this.terminals.get(terminalId)
-    if (!entry) return null
+    if (!entry?.pty) return null // gone, or a restored stub with nothing to paste into
 
     const file = `devenv-paste-${Date.now()}-${this.imgCounter++}.png`
     const hostPath = join(tmpdir(), file)
@@ -390,12 +481,12 @@ export class TerminalManager extends EventEmitter {
    */
   async stageFile(terminalId: string, hostPath: string): Promise<{ path: string } | null> {
     const entry = this.terminals.get(terminalId)
-    if (!entry) return null
+    if (!entry?.pty) return null // gone, or a restored stub with nothing to drop into
     return this.placeInEnvironment(entry, hostPath, `/tmp/${this.safeName(basename(hostPath))}`)
   }
 
   resize(terminalId: string, cols: number, rows: number): void {
-    this.terminals.get(terminalId)?.pty.resize(cols, rows)
+    this.terminals.get(terminalId)?.pty?.resize(cols, rows)
   }
 
   destroy(terminalId: string): void {
@@ -415,7 +506,8 @@ export class TerminalManager extends EventEmitter {
 
     // SIGHUP via pty.kill() — propagates through ssh / docker exec without
     // writing a visible "exit" command to the user's terminal first.
-    try { entry.pty.kill() } catch { /* already dead */ }
+    // A restored stub has no process to signal.
+    try { entry.pty?.kill() } catch { /* already dead */ }
 
     this.checkAutoDisconnect(profileId)
   }

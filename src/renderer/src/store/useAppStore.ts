@@ -62,6 +62,16 @@ interface AppStore {
   markTerminalUnread: (id: string) => void
   markTerminalRead: (id: string) => void
   setTerminalTitle: (id: string, title: string) => void
+  /** Swap a session in place, preserving tab order — used when a restored stub reconnects. */
+  setTerminalSession: (session: TerminalSession) => void
+  /** Seed the workspace saved by the previous run. */
+  hydrateSession: (state: {
+    terminals: TerminalSession[]
+    detachedTerminalIds: Record<string, true>
+    hiddenTerminalIds: Record<string, true>
+    activeTerminalId: string | null
+    activeProfileId: string | null
+  }) => void
 
   addLog: (entry: LogEntry) => void
   setLogs: (logs: LogEntry[]) => void
@@ -203,6 +213,34 @@ export const useAppStore = create<AppStore>((set) => ({
   setTerminalTitle: (id, title) =>
     set((s) => ({
       terminals: s.terminals.map((t) => (t.id === id ? { ...t, title } : t))
+    })),
+
+  setTerminalSession: (session) =>
+    set((s) => ({
+      terminals: s.terminals.map((t) => (t.id === session.id ? session : t))
+    })),
+
+  hydrateSession: ({
+    terminals,
+    detachedTerminalIds,
+    hiddenTerminalIds,
+    activeTerminalId,
+    activeProfileId
+  }) =>
+    set((s) => ({
+      // Append anything already opened — an autoConnectOnStart terminal can win
+      // the race against the restore, and must not be dropped on the floor.
+      terminals: [
+        ...terminals,
+        ...s.terminals.filter((t) => !terminals.some((r) => r.id === t.id))
+      ],
+      detachedTerminalIds,
+      hiddenTerminalIds,
+      activeTerminalId: s.activeTerminalId ?? activeTerminalId,
+      // A restored tab is a stub with no xterm to type into, so nothing gets
+      // keyboard focus until the user reconnects it.
+      focusedTerminalId: s.focusedTerminalId,
+      activeProfileId: s.activeProfileId ?? activeProfileId
     })),
 
   addLog: (entry) =>

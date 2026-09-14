@@ -6,6 +6,7 @@ import type {
   ContainerState,
   TerminalContext,
   TerminalSession,
+  PersistedSession,
   LogEntry
 } from '../shared/types'
 
@@ -106,6 +107,24 @@ const api = {
 
   attachTerminal: (terminalId: string): Promise<void> =>
     ipcRenderer.invoke('terminal:attach', terminalId),
+
+  // Give a terminal restored from the last run a real process again. Launches
+  // the profile first, and keeps the terminal's id so tabs/windows stay valid.
+  reconnectTerminal: (
+    terminalId: string,
+    cols: number,
+    rows: number
+  ): Promise<TerminalSession> =>
+    ipcRenderer.invoke('terminal:reconnect', terminalId, cols, rows),
+
+  // ── Session persistence ───────────────────────────────────────────────────
+  getRestoredSession: (): Promise<PersistedSession> =>
+    ipcRenderer.invoke('session:restored'),
+
+  // Fire-and-forget so it can also be called from a beforeunload handler,
+  // where there is no chance to await a reply.
+  saveSession: (snapshot: PersistedSession): void =>
+    ipcRenderer.send('session:save', snapshot),
 
   // ── Containers ────────────────────────────────────────────────────────────
   getContainerStatus: (profileId: string): Promise<ContainerState> =>

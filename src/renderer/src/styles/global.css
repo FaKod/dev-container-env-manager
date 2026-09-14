@@ -907,6 +907,36 @@ html, body, #root {
 }
 .terminal-wrapper.visible { display: block; }
 
+/* ── Restored (session-survived) terminal placeholder ──────────────────────── */
+.terminal-restored {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  color: var(--overlay0);
+}
+.terminal-restored-icon { color: var(--surface2); margin-bottom: 6px; }
+.terminal-restored-icon.spinning { animation: spin 1s linear infinite; }
+.terminal-restored h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--subtext0);
+  max-width: 90%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.terminal-restored p {
+  font-size: 12.5px;
+  max-width: 42ch;
+  line-height: 1.5;
+}
+.terminal-restored .btn { margin-top: 6px; }
+
 /* ── Detached terminal window ──────────────────────────────────────────────── */
 .detached-terminal-window {
   display: flex;
