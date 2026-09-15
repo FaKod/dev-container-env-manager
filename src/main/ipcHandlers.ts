@@ -1,4 +1,4 @@
-import { ipcMain, dialog, app, shell, clipboard } from 'electron'
+import { ipcMain, dialog, app, shell, clipboard, nativeImage } from 'electron'
 import { writeFileSync } from 'fs'
 import type { BrowserWindow } from 'electron'
 import type { ProfileManager } from './managers/ProfileManager'
@@ -23,6 +23,62 @@ interface SetupOptions {
   eventLogManager: EventLogManager
   sessionManager: SessionManager
   createDetachedTerminalWindow: (terminalId: string, bounds?: WindowBounds) => BrowserWindow
+}
+
+/**
+ * Read an image off the system clipboard as PNG bytes, or null if there is none.
+ *
+ * Electron 44 removed `clipboard.readImage()` in favour of the W3C-shaped
+ * `clipboard.read()`, which returns MIME-typed entries rather than a
+ * NativeImage. PNG data is taken as-is; any other image type is routed through
+ * nativeImage so callers still get PNG, which is what `readImage().toPNG()`
+ * produced before.
+ */
+/** The slice of Electron's ClipboardItem this needs, so it can be tested with stand-ins. */
+export interface ClipboardEntry {
+  readonly types: string[]
+  getType(type: string): Promise<unknown>
+}
+
+/**
+ * Pick an image out of already-read clipboard entries and return it as PNG.
+ * Split from the OS call so the MIME selection and decoding can be exercised
+ * directly — a headless X server refuses to carry image data on the clipboard,
+ * which makes the whole path untestable through `clipboard.read()`.
+ */
+export async function pngFromClipboardEntries(
+  entries: readonly ClipboardEntry[]
+): Promise<Buffer | null> {
+  const entry = entries.find((e) => e.types.some((t) => t.startsWith('image/')))
+  if (!entry) return null
+
+  // Prefer PNG so the common case needs no re-encoding.
+  const type =
+    entry.types.find((t) => t === 'image/png') ?? entry.types.find((t) => t.startsWith('image/'))
+  if (!type) return null
+
+  try {
+    const payload = await entry.getType(type)
+    if (!(payload instanceof Blob)) return null
+
+    const bytes = Buffer.from(await payload.arrayBuffer())
+    if (bytes.length === 0) return null
+    if (type === 'image/png') return bytes
+
+    // Match what readImage().toPNG() used to hand back for non-PNG sources.
+    const img = nativeImage.createFromBuffer(bytes)
+    return img.isEmpty() ? null : img.toPNG()
+  } catch {
+    return null // malformed entry — fall back to a plain text paste
+  }
+}
+
+export async function readClipboardPng(): Promise<Buffer | null> {
+  try {
+    return await pngFromClipboardEntries(await clipboard.read())
+  } catch {
+    return null // clipboard unavailable (no session / headless)
+  }
 }
 
 export interface IpcHandles {
@@ -105,9 +161,16 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
   ipcMain.handle('project:delete', (_e, id: string) => profileManager.deleteProject(id))
 
   ipcMain.handle('profile:pickWorkspace', async (_e, profileId: string) => {
+    // Electron 43 stopped reopening the last-used directory and now starts in
+    // Downloads. Seed it from the workspace this profile already points at, so
+    // re-picking a folder doesn't start from an unrelated place every time.
+    const current = profileManager.getById(profileId)?.workspace
+    const defaultPath = current?.localPath ?? current?.recentPaths?.[0]
+
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory'],
-      title: 'Select workspace folder'
+      title: 'Select workspace folder',
+      ...(defaultPath ? { defaultPath } : {})
     })
     if (result.canceled || result.filePaths.length === 0) return null
 
@@ -237,9 +300,9 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
   // Stage a clipboard image into the terminal's environment and return the path
   // its process will see. Returns null when the clipboard holds no image.
   ipcMain.handle('terminal:pasteImage', async (_e, terminalId: string) => {
-    const img = clipboard.readImage()
-    if (img.isEmpty()) return null
-    return terminalManager.stageImage(terminalId, img.toPNG())
+    const png = await readClipboardPng()
+    if (!png) return null
+    return terminalManager.stageImage(terminalId, png)
   })
 
   // Stage files dropped onto the terminal into its environment; returns the
