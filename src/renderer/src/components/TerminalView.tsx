@@ -82,7 +82,14 @@ function createXterm(
     fontSize: terminalFontSize,
     lineHeight: 1.4,
     scrollback: 5000,
-    theme: xtermTheme(mode)
+    theme: xtermTheme(mode),
+    // OSC 8 hyperlinks (Claude Code wraps its login URL in these) carry the full
+    // URI as cell metadata, so they survive resizes that mangle the visible text.
+    // Without a handler xterm falls back to confirm() + window.open(), which our
+    // window-open handler turns into shell.openExternal('about:blank').
+    linkHandler: {
+      activate: (_event, uri) => window.api.openUrl(uri)
+    }
   })
 
   const fitAddon = new FitAddon()

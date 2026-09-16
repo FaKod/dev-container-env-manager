@@ -134,6 +134,11 @@ function buildFrom(
   let curContent = content
   let curEnd = startIdx + first.length - 1
 
+  // Column the block's full rows end at, once one hard-wrap join has been made.
+  // Rows written before a terminal resize keep their original width, so this —
+  // not the current buffer width — is the edge later fragments must reach.
+  let blockEdge = -1
+
   while (url.length < MAX_URL_LENGTH) {
     const next = rows[curRow + 1]
     if (!next) break
@@ -143,9 +148,18 @@ function buildFrom(
 
     if (!next.isWrapped) {
       // The application broke this line itself. Only continue if the fragment
-      // above actually reached the edge of the available width.
+      // above actually ran out of room: either it reaches the edge of the
+      // available width, or — when the terminal has since been resized wider —
+      // it ends flush with the rest of the block (the next row fills the same
+      // original width, or earlier joins already established that edge).
       if (curEnd !== lastNonSpace(curContent.text)) break
-      if (curContent.text.length - 1 - curEnd > WRAP_SLACK) break
+      const fragEnd = curContent.left + curEnd
+      const nextEnd = nextContent.left + lastNonSpace(nextContent.text)
+      const flushWithTerminal = curContent.text.length - 1 - curEnd <= WRAP_SLACK
+      const flushWithBlock =
+        blockEdge >= 0 ? fragEnd === blockEdge : Math.abs(nextEnd - fragEnd) <= WRAP_SLACK
+      if (!flushWithTerminal && !flushWithBlock) break
+      blockEdge = Math.max(blockEdge, fragEnd)
     }
 
     const chunkStart = firstNonSpace(nextContent.text)
