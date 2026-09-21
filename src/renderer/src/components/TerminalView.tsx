@@ -658,6 +658,7 @@ export function TerminalView(): React.ReactElement {
   const removeSplit = useAppStore((s) => s.removeSplit)
   const theme = useAppStore((s) => s.theme)
   const tileMode = useAppStore((s) => s.tileMode)
+  const tabsPosition = useAppStore((s) => s.tabsPosition)
   const detachedTerminalIds = useAppStore((s) => s.detachedTerminalIds)
   const hiddenTerminalIds = useAppStore((s) => s.hiddenTerminalIds)
   const terminals = allTerminals.filter(
@@ -682,13 +683,15 @@ export function TerminalView(): React.ReactElement {
     }
   }, [theme])
 
-  // Re-fit all terminals when exiting tile mode (returning to tab view)
+  // Re-fit all terminals when exiting tile mode (returning to tab view) or
+  // when the tab strip moves between top/side (the layout swap remounts panes
+  // before the ResizeObserver necessarily sees the settled size).
   useEffect(() => {
     if (!tileMode && activeTerminalId) {
       const ids = splitSession ? [activeTerminalId, splitSession.id] : [activeTerminalId]
       setTimeout(() => fitAll(ids), 50)
     }
-  }, [tileMode])
+  }, [tileMode, tabsPosition])
 
   const handleDividerMouseDown = useCallback(
     (e: React.MouseEvent) => {

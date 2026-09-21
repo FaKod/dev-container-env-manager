@@ -31,6 +31,13 @@ export default function App(): React.ReactElement {
   const { size: sidebarWidth, handleMouseDown: sidebarMouseDown } = useResizablePane(280, 180, 480, 'horizontal')
   const { size: bottomHeight, handleMouseDown: bottomMouseDown } = useResizablePane(200, 90, 600, 'vertical')
   const { size: logViewerWidth, handleMouseDown: logViewerMouseDown } = useResizablePane(380, 200, 700, 'horizontal', true)
+  const { size: tabSidebarWidth, handleMouseDown: tabSidebarMouseDown } = useResizablePane(220, 150, 420, 'horizontal')
+
+  const tabsPosition = useAppStore((s) => s.tabsPosition)
+  const tileMode = useAppStore((s) => s.tileMode)
+  // Tile mode replaces tabs with a grid — keep the top strip (controls only)
+  // rather than leaving an empty left column.
+  const sideTabs = tabsPosition === 'side' && !tileMode
 
   // ── Apply theme on mount and whenever it changes ──────────────────────────────
   useEffect(() => {
@@ -171,8 +178,20 @@ export default function App(): React.ReactElement {
         <div className="resize-handle resize-handle-ew resize-handle-sidebar" onMouseDown={sidebarMouseDown} />
       </div>
       <div className="main-area">
-        <TerminalTabs />
-        <TerminalView />
+        {sideTabs ? (
+          <div className="terminal-row">
+            <div className="tab-sidebar-pane" style={{ width: tabSidebarWidth, minWidth: tabSidebarWidth }}>
+              <TerminalTabs />
+              <div className="resize-handle resize-handle-ew resize-handle-sidebar" onMouseDown={tabSidebarMouseDown} />
+            </div>
+            <TerminalView />
+          </div>
+        ) : (
+          <>
+            <TerminalTabs />
+            <TerminalView />
+          </>
+        )}
         {showStatusPanel && <div className="resize-handle" onMouseDown={bottomMouseDown} />}
         <PanelToggleBar />
         {showStatusPanel && (

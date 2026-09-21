@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { SplitSquareHorizontal, SplitSquareVertical, Plus, X, LayoutGrid, Rows3, Anchor, ExternalLink, RefreshCw, EyeOff, ChevronDown } from 'lucide-react'
+import { SplitSquareHorizontal, SplitSquareVertical, Plus, X, LayoutGrid, Rows3, Anchor, ExternalLink, RefreshCw, EyeOff, ChevronDown, Monitor, Globe, Container, PanelLeft, PanelTop } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { cleanupTerminalInstance } from './TerminalView'
 import { toast } from './Toast'
@@ -11,6 +11,14 @@ function profileColorVar(profile: Profile | undefined): string {
   if (profile?.color) return profile.color
   if (!profile) return '--overlay0'
   return AUTO_PALETTE[profile.name.charCodeAt(0) % AUTO_PALETTE.length]
+}
+
+// Context badge as an icon instead of a text pill: at the tab min-width every
+// pixel goes to the title. Also used by DetachedTerminalApp's toolbar.
+export function ContextIcon({ context, size = 12 }: { context: TerminalContext; size?: number }): React.ReactElement {
+  if (context === 'ssh') return <Globe size={size} />
+  if (context === 'container') return <Container size={size} />
+  return <Monitor size={size} />
 }
 
 export function TerminalTabs(): React.ReactElement {
@@ -26,6 +34,8 @@ export function TerminalTabs(): React.ReactElement {
   const containers = useAppStore((s) => s.containers)
   const tileMode = useAppStore((s) => s.tileMode)
   const toggleTileMode = useAppStore((s) => s.toggleTileMode)
+  const tabsPosition = useAppStore((s) => s.tabsPosition)
+  const toggleTabsPosition = useAppStore((s) => s.toggleTabsPosition)
   const setActiveTerminal = useAppStore((s) => s.setActiveTerminal)
   const setActiveProfile = useAppStore((s) => s.setActiveProfile)
   const removeTerminal = useAppStore((s) => s.removeTerminal)
@@ -39,7 +49,7 @@ export function TerminalTabs(): React.ReactElement {
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
+  const [menuPos, setMenuPos] = useState<{ top: number; left?: number; right?: number } | null>(null)
   const menuBtnRef = useRef<HTMLDivElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const activeTabRef = useRef<HTMLDivElement | null>(null)
@@ -72,6 +82,8 @@ export function TerminalTabs(): React.ReactElement {
   }, [menuOpen])
 
   const activeSplit = activeTerminalId ? splits[activeTerminalId] : undefined
+  // Tile mode always uses the familiar top strip; the side layout resumes on exit.
+  const side = tabsPosition === 'side' && !tileMode
 
   function checkReady(ctx: TerminalContext, profileId: string): boolean {
     if (ctx === 'local') return true
@@ -280,7 +292,7 @@ export function TerminalTabs(): React.ReactElement {
   }
 
   return (
-    <div className="terminal-tabs">
+    <div className={side ? 'terminal-tabs terminal-tabs-side' : 'terminal-tabs'}>
       <div className="terminal-tabs-list">
       {!tileMode && visibleTerminals.map((t) => {
         const profile = profiles.find(p => p.id === t.profileId)
@@ -333,9 +345,9 @@ export function TerminalTabs(): React.ReactElement {
         >
           <span
             className={`terminal-tab-context tab-ctx-${t.context}`}
-            title={t.context}
+            title={`Context: ${t.context}`}
           >
-            {t.context === 'container' ? 'c' : t.context}
+            <ContextIcon context={t.context} />
           </span>
           {isPrimary && (
             // lucide icons drop unknown props, so `title` on the icon itself
@@ -350,8 +362,7 @@ export function TerminalTabs(): React.ReactElement {
           <span className="terminal-tab-title">{t.title}</span>
           {t.hasUnread && <span className="terminal-tab-unread" />}
           <button
-            className="btn btn-icon"
-            style={{ marginLeft: 4 }}
+            className="btn btn-icon terminal-tab-close"
             onClick={(e) => handleCloseTab(e, t.id)}
             title="Close terminal"
           >
@@ -431,11 +442,25 @@ export function TerminalTabs(): React.ReactElement {
             title="Jump to terminal"
             onClick={() => {
               const r = menuBtnRef.current?.getBoundingClientRect()
-              if (r) setMenuPos({ top: r.bottom, right: Math.max(4, window.innerWidth - r.right) })
+              // Side mode anchors the menu's left edge: a right-anchor next to
+              // the window's left edge would push the 200px menu off-screen.
+              if (r) setMenuPos(side
+                ? { top: r.bottom, left: Math.max(4, r.left) }
+                : { top: r.bottom, right: Math.max(4, window.innerWidth - r.right) })
               setMenuOpen((o) => !o)
             }}
           >
             <ChevronDown size={14} />
+          </div>
+        )}
+
+        {!tileMode && terminals.length > 0 && (
+          <div
+            className="terminal-tabs-add"
+            onClick={toggleTabsPosition}
+            title={side ? 'Move tabs to top' : 'Move tabs to sidebar'}
+          >
+            {side ? <PanelTop size={14} /> : <PanelLeft size={14} />}
           </div>
         )}
 
@@ -454,7 +479,7 @@ export function TerminalTabs(): React.ReactElement {
         <div
           ref={menuRef}
           className="tab-jump-menu"
-          style={{ top: menuPos.top, right: menuPos.right }}
+          style={{ top: menuPos.top, left: menuPos.left, right: menuPos.right }}
         >
           {visibleTerminals.map((t) => {
             const profile = profiles.find((p) => p.id === t.profileId)
@@ -469,7 +494,7 @@ export function TerminalTabs(): React.ReactElement {
                   style={{ background: `var(${profileColorVar(profile)})` }}
                 />
                 <span className={`terminal-tab-context tab-ctx-${t.context}`} title={t.context}>
-                  {t.context === 'container' ? 'c' : t.context}
+                  <ContextIcon context={t.context} />
                 </span>
                 <span className="tab-jump-title">{t.title}</span>
                 {t.hasUnread && <span className="terminal-tab-unread" />}

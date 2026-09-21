@@ -38,6 +38,9 @@ interface AppStore {
   showLogViewer: boolean
   showStatusPanel: boolean
   tileMode: boolean
+  // Where the terminal tab strip lives; independent of tileMode (tile wins
+  // while active, exiting it restores the remembered orientation).
+  tabsPosition: 'top' | 'side'
   theme: 'dark' | 'light'
 
   // ── Actions ─────────────────────────────────────────────────────────────────
@@ -88,6 +91,7 @@ interface AppStore {
   toggleLogViewer: () => void
   toggleStatusPanel: () => void
   toggleTileMode: () => void
+  toggleTabsPosition: () => void
   toggleTheme: () => void
 }
 
@@ -112,6 +116,7 @@ export const useAppStore = create<AppStore>((set) => ({
   showLogViewer: false,
   showStatusPanel: false,
   tileMode: false,
+  tabsPosition: (localStorage.getItem('tabsPosition') as 'top' | 'side') ?? 'top',
   theme: (localStorage.getItem('theme') as 'dark' | 'light') ?? 'dark',
 
   setProjects: (projects) => set({ projects }),
@@ -300,6 +305,13 @@ export const useAppStore = create<AppStore>((set) => ({
   toggleLogViewer: () => set((s) => ({ showLogViewer: !s.showLogViewer })),
   toggleStatusPanel: () => set((s) => ({ showStatusPanel: !s.showStatusPanel })),
   toggleTileMode: () => set((s) => ({ tileMode: !s.tileMode })),
+
+  toggleTabsPosition: () =>
+    set((s) => {
+      const next = s.tabsPosition === 'top' ? 'side' : 'top'
+      localStorage.setItem('tabsPosition', next)
+      return { tabsPosition: next }
+    }),
 
   toggleTheme: () =>
     set((s) => {

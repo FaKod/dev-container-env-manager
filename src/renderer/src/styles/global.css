@@ -614,18 +614,19 @@ html, body, #root {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 14px;
+  padding: 0 8px 0 10px;
   font-size: 12px;
   color: var(--overlay1);
   cursor: pointer;
   white-space: nowrap;
   border-right: 1px solid var(--surface0);
   transition: background 0.1s, color 0.1s;
+  position: relative;  /* anchors the close-button overlay and .active::after */
   /* Few tabs grow to share width (up to max); many tabs floor at min and the
      list scrolls instead of collapsing the title. Basis 0 keeps width
      independent of content. */
   flex: 1 1 0;
-  min-width: 150px;
+  min-width: 130px;
   max-width: 240px;
   /* Profile color shown as a 3px inset bar on the left edge. Inset shadow
      avoids changing the tab's box size (vs. a real border). */
@@ -639,7 +640,6 @@ html, body, #root {
   color: var(--text);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.04),
               inset 3px 0 0 var(--tab-color, transparent);
-  position: relative;
 }
 
 .terminal-tab.active::after {
@@ -664,24 +664,45 @@ html, body, #root {
   min-width: 0;       /* lets ellipsis trigger inside the nowrap flex row */
 }
 
+/* Icon, not a text pill: at the tab min-width every pixel goes to the title. */
 .terminal-tab-context {
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  padding: 2px 7px;
-  border-radius: 999px;
-  letter-spacing: 0.04em;
-  transition: box-shadow 0.15s;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: filter 0.15s;
 }
 
-.tab-ctx-local     { background: var(--surface1); color: var(--subtext0); border: 1px solid var(--surface2); }
-.tab-ctx-ssh       { background: rgba(116,199,236,.2); color: var(--sapphire); border: 1px solid rgba(116,199,236,.3); }
-.tab-ctx-container { background: rgba(166,227,161,.2); color: var(--green); border: 1px solid rgba(166,227,161,.3); }
+.tab-ctx-local     { color: var(--subtext0); }
+.tab-ctx-ssh       { color: var(--sapphire); }
+.tab-ctx-container { color: var(--green); }
 
 .terminal-tab:hover .tab-ctx-ssh,
-.terminal-tab.active .tab-ctx-ssh       { box-shadow: 0 0 8px rgba(116,199,236,0.45); }
+.terminal-tab.active .tab-ctx-ssh       { filter: drop-shadow(0 0 4px rgba(116,199,236,0.6)); }
 .terminal-tab:hover .tab-ctx-container,
-.terminal-tab.active .tab-ctx-container { box-shadow: 0 0 8px rgba(166,227,161,0.45); }
+.terminal-tab.active .tab-ctx-container { filter: drop-shadow(0 0 4px rgba(166,227,161,0.6)); }
+
+/* Close button overlays the tab's right edge on hover/active instead of
+   reserving space: no reflow (so no jiggle), and hidden-state tabs give the
+   full width to the title — browser-tab convention. */
+.terminal-tab-close {
+  display: none;
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  background: var(--surface0);   /* matches the hovered tab's background */
+}
+.terminal-tab:hover .terminal-tab-close,
+.terminal-tab.active .terminal-tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* The active tab keeps --base even while hovered (.active follows :hover). */
+.terminal-tab.active .terminal-tab-close { background: var(--base); }
+.terminal-tab-close:hover { background: var(--surface1); color: var(--red); }
 
 .terminal-tabs-add {
   display: flex;
@@ -735,8 +756,69 @@ html, body, #root {
   white-space: nowrap;
 }
 
+/* ── Vertical tab sidebar mode ─────────────────────────────────────────────── */
+/* Row wrapping the tab sidebar + terminal when tabsPosition === 'side'. */
+.terminal-row {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+.tab-sidebar-pane {
+  position: relative;   /* hosts the absolute .resize-handle-sidebar */
+  flex-shrink: 0;
+  display: flex;
+}
+
+.terminal-tabs-side {
+  flex: 1;
+  height: auto;         /* overrides the top strip's --tab-bar-height */
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+  border-bottom: none;
+  border-right: 1px solid var(--surface0);
+}
+.terminal-tabs-side .terminal-tabs-list {
+  flex-direction: column;
+  align-items: stretch;
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-height: 0;
+}
+.terminal-tabs-side .terminal-tabs-list::-webkit-scrollbar { width: 3px; }
+.terminal-tabs-side .terminal-tab {
+  flex: 0 0 auto;
+  height: 32px;
+  min-width: 0;
+  max-width: none;      /* full-width rows: long profile names fit */
+  border-right: none;
+  border-bottom: 1px solid var(--surface0);
+}
+/* The active-tab underline reads wrong on a vertical list — right edge instead. */
+.terminal-tabs-side .terminal-tab.active::after {
+  top: 0;
+  bottom: 0;
+  left: auto;
+  right: 0;
+  width: 2px;
+  height: auto;
+  background: linear-gradient(180deg, var(--blue), var(--mauve));
+  border-radius: 2px 0 0 2px;
+}
+.terminal-tabs-side .terminal-tabs-controls {
+  border-left: none;
+  border-top: 1px solid var(--surface0);
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 2px;
+}
+.terminal-tabs-side .terminal-tabs-add { padding: 6px 8px; margin: 2px; }
+.terminal-tabs-side .terminal-tabs-sep { height: 16px; margin: 0 4px; }
+
 .terminal-container {
   flex: 1;
+  min-width: 0;   /* as a .terminal-row child it must not force overflow */
   overflow: hidden;
   position: relative;
   background: var(--base);

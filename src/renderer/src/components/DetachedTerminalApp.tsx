@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Anchor } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { TerminalPane } from './TerminalView'
+import { ContextIcon } from './TerminalTabs'
 import { ToastContainer, toast } from './Toast'
 
 interface Props {
@@ -82,8 +83,8 @@ export function DetachedTerminalApp({ terminalId }: Props): React.ReactElement {
   return (
     <div className="detached-terminal-window">
       <div className="detached-terminal-toolbar">
-        <span className={`terminal-tab-context tab-ctx-${session.context}`}>
-          {session.context}
+        <span className={`terminal-tab-context tab-ctx-${session.context}`} title={`Context: ${session.context}`}>
+          <ContextIcon context={session.context} />
         </span>
         <span className="detached-terminal-title">{sessionTitle}</span>
         <span style={{ flex: 1 }} />
