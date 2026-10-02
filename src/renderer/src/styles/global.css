@@ -331,13 +331,8 @@ html, body, #root {
 
 .profile-card.active {
   background: var(--surface0);
-  border-color: var(--blue);
-  box-shadow: var(--glow-blue), var(--shadow-sm);
-}
-
-.profile-card.connected-glow {
+  border-color: var(--green);
   box-shadow: var(--glow-green), var(--shadow-sm);
-  border-color: rgba(166,227,161,0.35);
 }
 
 .profile-avatar {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Pencil, Copy, Trash2, Globe, Eye } from 'lucide-react'
 import { ProfileIcon, PROFILE_ICONS } from './profileIcons'
 import { useAppStore } from '../store/useAppStore'
@@ -35,6 +35,13 @@ export function ProfileCard({ profile, compact = false }: Props): React.ReactEle
   )
 
   const [busy, setBusy] = useState(false)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const isActive = activeProfileId === profile.id
+
+  // Keep the selected profile visible when selection changes elsewhere (e.g. a tab click)
+  useEffect(() => {
+    if (isActive) cardRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [isActive])
   const connState = connections[profile.id]
   const status = connState?.status ?? 'disconnected'
 
@@ -128,11 +135,11 @@ export function ProfileCard({ profile, compact = false }: Props): React.ReactEle
 
   return (
     <div
+      ref={cardRef}
       className={[
         'profile-card',
         compact ? 'compact' : '',
-        activeProfileId === profile.id ? 'active' : '',
-        isConnected && activeProfileId !== profile.id ? 'connected-glow' : ''
+        isActive ? 'active' : ''
       ].filter(Boolean).join(' ')}
       onClick={handleSelect}
       draggable
