@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react'
-import { Terminal, Plus, Upload, Download, Sun, Moon, ChevronDown, Pencil, X, FolderPlus } from 'lucide-react'
+import { Terminal, Plus, Upload, Download, Sun, Moon, ChevronDown, ChevronsDownUp, ChevronsUpDown, Pencil, X, FolderPlus } from 'lucide-react'
 import logoImg from '../assets/devenvmanager.png'
 import { useAppStore } from '../store/useAppStore'
 import { ProfileCard } from './ProfileCard'
@@ -15,10 +15,12 @@ interface ProjectSectionProps {
   profiles: Profile[]
   isOrphaned?: boolean
   collapsed: boolean
+  compact: boolean
   dragOver: boolean
   editing: boolean
   editName: string
   onToggle: () => void
+  onToggleCompact: () => void
   onEditStart: () => void
   onEditChange: (name: string) => void
   onEditConfirm: () => void
@@ -35,10 +37,12 @@ function ProjectSection({
   profiles,
   isOrphaned = false,
   collapsed,
+  compact,
   dragOver,
   editing,
   editName,
   onToggle,
+  onToggleCompact,
   onEditStart,
   onEditChange,
   onEditConfirm,
@@ -90,21 +94,33 @@ function ProjectSection({
 
         <span className="project-count">{profiles.length}</span>
 
-        {!isOrphaned && !editing && (
+        {!editing && (
           <div className="project-actions" onClick={(e) => e.stopPropagation()}>
-            <button className="btn btn-icon" title="Rename project" onClick={onEditStart} style={{ padding: '1px 3px' }}>
-              <Pencil size={10} />
+            <button
+              className="btn btn-icon"
+              title={compact ? 'Expand profile tiles' : 'Collapse profile tiles'}
+              onClick={onToggleCompact}
+              style={{ padding: '1px 3px' }}
+            >
+              {compact ? <ChevronsUpDown size={10} /> : <ChevronsDownUp size={10} />}
             </button>
-            <button className="btn btn-icon" title="Delete project" onClick={onDelete} style={{ padding: '1px 3px' }}>
-              <X size={10} />
-            </button>
+            {!isOrphaned && (
+              <>
+                <button className="btn btn-icon" title="Rename project" onClick={onEditStart} style={{ padding: '1px 3px' }}>
+                  <Pencil size={10} />
+                </button>
+                <button className="btn btn-icon" title="Delete project" onClick={onDelete} style={{ padding: '1px 3px' }}>
+                  <X size={10} />
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
 
       <div className={`project-profiles${collapsed ? ' hidden' : ''}`}>
         {profiles.map((p) => (
-          <ProfileCard key={p.id} profile={p} />
+          <ProfileCard key={p.id} profile={p} compact={compact} />
         ))}
         {profiles.length === 0 && !collapsed && (
           <div className="project-empty">Drop a profile here</div>
@@ -127,6 +143,12 @@ export function Sidebar(): React.ReactElement {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     try {
       const stored = localStorage.getItem('collapsedProjects')
+      return stored ? new Set(JSON.parse(stored)) : new Set()
+    } catch { return new Set() }
+  })
+  const [compactProjects, setCompactProjects] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('compactProjects')
       return stored ? new Set(JSON.parse(stored)) : new Set()
     } catch { return new Set() }
   })
@@ -153,6 +175,16 @@ export function Sidebar(): React.ReactElement {
       if (next.has(id)) next.delete(id)
       else next.add(id)
       localStorage.setItem('collapsedProjects', JSON.stringify([...next]))
+      return next
+    })
+  }
+
+  function toggleCompact(id: string): void {
+    setCompactProjects((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      localStorage.setItem('compactProjects', JSON.stringify([...next]))
       return next
     })
   }
@@ -301,10 +333,12 @@ export function Sidebar(): React.ReactElement {
             label={project.name}
             profiles={grouped[project.id] ?? []}
             collapsed={collapsed.has(project.id)}
+            compact={compactProjects.has(project.id)}
             dragOver={dragOverId === project.id}
             editing={editingId === project.id}
             editName={editName}
             onToggle={() => toggleCollapse(project.id)}
+            onToggleCompact={() => toggleCompact(project.id)}
             onEditStart={() => startEdit(project)}
             onEditChange={setEditName}
             onEditConfirm={confirmEdit}
@@ -324,10 +358,12 @@ export function Sidebar(): React.ReactElement {
             profiles={grouped['orphaned'] ?? []}
             isOrphaned
             collapsed={collapsed.has('orphaned')}
+            compact={compactProjects.has('orphaned')}
             dragOver={dragOverId === 'orphaned'}
             editing={false}
             editName=""
             onToggle={() => toggleCollapse('orphaned')}
+            onToggleCompact={() => toggleCompact('orphaned')}
             onEditStart={() => {}}
             onEditChange={() => {}}
             onEditConfirm={() => {}}
@@ -340,7 +376,7 @@ export function Sidebar(): React.ReactElement {
         )}
 
         {projects.length === 0 && profiles.map((p) => (
-          <ProfileCard key={p.id} profile={p} />
+          <ProfileCard key={p.id} profile={p} compact={compactProjects.has('orphaned')} />
         ))}
       </div>
 

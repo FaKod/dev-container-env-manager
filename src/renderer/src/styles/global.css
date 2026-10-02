@@ -413,6 +413,26 @@ html, body, #root {
   margin-top: 8px;
 }
 
+/* Compact tiles (per-project toggle in the project header) */
+.profile-card.compact {
+  padding: 5px 10px;
+  border-radius: 8px;
+}
+
+.profile-card.compact .profile-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  font-size: 9px;
+}
+
+.profile-card.compact .profile-avatar.avatar-connected::before { border-radius: 8px; }
+.profile-card.compact .profile-avatar.avatar-connecting::after { border-radius: 8px; }
+
+.profile-card.compact .profile-name {
+  font-size: 12px;
+}
+
 /* ── Status badges ─────────────────────────────────────────────────────────── */
 .status-badge {
   display: inline-flex;

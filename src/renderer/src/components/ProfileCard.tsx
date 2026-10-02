@@ -9,9 +9,10 @@ const AVATAR_COLORS = ['--blue', '--mauve', '--teal', '--peach', '--green', '--s
 
 interface Props {
   profile: Profile
+  compact?: boolean
 }
 
-export function ProfileCard({ profile }: Props): React.ReactElement {
+export function ProfileCard({ profile, compact = false }: Props): React.ReactElement {
   const {
     connections,
     activeProfileId,
@@ -128,6 +129,7 @@ export function ProfileCard({ profile }: Props): React.ReactElement {
     <div
       className={[
         'profile-card',
+        compact ? 'compact' : '',
         activeProfileId === profile.id ? 'active' : '',
         isConnected && activeProfileId !== profile.id ? 'connected-glow' : ''
       ].filter(Boolean).join(' ')}
@@ -155,71 +157,75 @@ export function ProfileCard({ profile }: Props): React.ReactElement {
         </div>
         <StatusBadge status={status} />
       </div>
-      <div className="profile-host">{profile.local ? 'Local machine' : profile.ssh.host}</div>
+      {!compact && (
+        <>
+          <div className="profile-host">{profile.local ? 'Local machine' : profile.ssh.host}</div>
 
-      <div className="profile-card-actions" onClick={(e) => e.stopPropagation()}>
-        {isConnected || isConnecting ? (
-          <button
-            className="btn btn-danger btn-sm"
-            onClick={handleDisconnect}
-            disabled={busy}
-          >
-            Disconnect
-          </button>
-        ) : (
-          <button
-            className="btn btn-success btn-sm"
-            onClick={handleConnect}
-            disabled={busy}
-          >
-            {busy ? 'Connecting…' : 'Connect'}
-          </button>
-        )}
+          <div className="profile-card-actions" onClick={(e) => e.stopPropagation()}>
+            {isConnected || isConnecting ? (
+              <button
+                className="btn btn-danger btn-sm"
+                onClick={handleDisconnect}
+                disabled={busy}
+              >
+                Disconnect
+              </button>
+            ) : (
+              <button
+                className="btn btn-success btn-sm"
+                onClick={handleConnect}
+                disabled={busy}
+              >
+                {busy ? 'Connecting…' : 'Connect'}
+              </button>
+            )}
 
-        {hiddenForProfile.length > 0 && (
-          <button
-            className="btn btn-icon profile-unhide"
-            onClick={handleUnhide}
-            title={`Show ${hiddenForProfile.length} hidden terminal${hiddenForProfile.length > 1 ? 's' : ''}`}
-          >
-            <Eye size={12} />
-            <span className="profile-unhide-count">{hiddenForProfile.length}</span>
-          </button>
-        )}
+            {hiddenForProfile.length > 0 && (
+              <button
+                className="btn btn-icon profile-unhide"
+                onClick={handleUnhide}
+                title={`Show ${hiddenForProfile.length} hidden terminal${hiddenForProfile.length > 1 ? 's' : ''}`}
+              >
+                <Eye size={12} />
+                <span className="profile-unhide-count">{hiddenForProfile.length}</span>
+              </button>
+            )}
 
-        <button
-          className="btn btn-icon"
-          onClick={() => handleOpenBrowser()}
-          title="Open browser"
-        >
-          <Globe size={12} />
-        </button>
+            <button
+              className="btn btn-icon"
+              onClick={() => handleOpenBrowser()}
+              title="Open browser"
+            >
+              <Globe size={12} />
+            </button>
 
-        <button
-          className="btn btn-icon"
-          onClick={() => openProfileEditor(profile.id)}
-          title="Edit profile"
-        >
-          <Pencil size={12} />
-        </button>
+            <button
+              className="btn btn-icon"
+              onClick={() => openProfileEditor(profile.id)}
+              title="Edit profile"
+            >
+              <Pencil size={12} />
+            </button>
 
-        <button
-          className="btn btn-icon"
-          onClick={handleClone}
-          title="Clone profile"
-        >
-          <Copy size={12} />
-        </button>
+            <button
+              className="btn btn-icon"
+              onClick={handleClone}
+              title="Clone profile"
+            >
+              <Copy size={12} />
+            </button>
 
-        <button
-          className="btn btn-icon"
-          onClick={handleDelete}
-          title="Delete profile"
-          style={{ marginLeft: 'auto' }}
-        >
-          <Trash2 size={12} />
-        </button>
-      </div>
+            <button
+              className="btn btn-icon"
+              onClick={handleDelete}
+              title="Delete profile"
+              style={{ marginLeft: 'auto' }}
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }
