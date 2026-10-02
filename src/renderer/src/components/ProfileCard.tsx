@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Pencil, Copy, Trash2, Globe, Eye } from 'lucide-react'
+import { ProfileIcon, PROFILE_ICONS } from './profileIcons'
 import { useAppStore } from '../store/useAppStore'
 import { toast } from './Toast'
 import { showConfirm } from './ConfirmModal'
@@ -150,7 +151,9 @@ export function ProfileCard({ profile, compact = false }: Props): React.ReactEle
           ].filter(Boolean).join(' ')}
           style={{ background: `var(${avatarColor})` }}
         >
-          {profile.name[0].toUpperCase()}
+          {profile.icon && PROFILE_ICONS[profile.icon]
+            ? <ProfileIcon icon={profile.icon} size={compact ? 12 : 15} />
+            : profile.name[0].toUpperCase()}
         </span>
         <div className="profile-name" title={profile.name}>
           {profile.name}

@@ -80,6 +80,7 @@ export interface Profile {
   id: string
   name: string
   color?: string
+  icon?: string
   local?: boolean
   ssh: SSHConfig
   container?: ContainerConfig

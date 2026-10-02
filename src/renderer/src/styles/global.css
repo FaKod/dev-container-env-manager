@@ -1426,6 +1426,15 @@ input[type="checkbox"] { accent-color: var(--blue); }
 .color-swatch:hover { transform: scale(1.18); }
 .color-swatch.selected { box-shadow: 0 0 0 2px var(--base), 0 0 0 4px var(--text); }
 
+/* Icon picker swatches: neutral ground, glyph in text color */
+.icon-swatch {
+  background: var(--surface1);
+  color: var(--text);
+}
+.icon-swatch.selected { background: var(--surface2); }
+
+.profile-avatar svg { display: block; }
+
 /* ── Port forward rows ─────────────────────────────────────────────────────── */
 .port-row {
   display: flex;
