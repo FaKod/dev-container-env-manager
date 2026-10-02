@@ -350,7 +350,7 @@ export function Sidebar(): React.ReactElement {
           />
         ))}
 
-        {(projects.length > 0 || (grouped['orphaned']?.length ?? 0) > 0) && (
+        {projects.length > 0 && (
           <ProjectSection
             key="orphaned"
             id="orphaned"
