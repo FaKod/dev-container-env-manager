@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { toast } from './Toast'
 import { showConfirm } from './ConfirmModal'
-import { PROFILE_ICONS } from './profileIcons'
+import { PROFILE_ICON_GROUPS } from './profileIcons'
 import type { Profile, PortForward } from '../../../shared/types'
 
 type DraftProfile = Omit<Profile, 'id' | 'createdAt' | 'updatedAt'>
@@ -362,30 +362,39 @@ function GeneralTab({ draft, onChange, firstInputRef }: TabProps): React.ReactEl
       </div>
       <div className="form-group">
         <label>Icon</label>
-        <div className="color-swatch-grid">
-          <button
-            className={`color-swatch${draft.icon === undefined ? ' selected' : ''}`}
-            onClick={() => onChange('icon', undefined)}
-            title="Auto (first letter)"
-            style={{
-              border: '2px dashed var(--overlay0)',
-              background: 'transparent',
-              color: 'var(--overlay0)',
-              fontSize: 10,
-              fontWeight: 600
-            }}
-          >
-            A
-          </button>
-          {Object.entries(PROFILE_ICONS).map(([key, Icon]) => (
+        <div className="icon-picker">
+          <div className="color-swatch-grid">
             <button
-              key={key}
-              className={`color-swatch icon-swatch${draft.icon === key ? ' selected' : ''}`}
-              onClick={() => onChange('icon', key)}
-              title={key}
+              className={`color-swatch${draft.icon === undefined ? ' selected' : ''}`}
+              onClick={() => onChange('icon', undefined)}
+              title="Auto (first letter)"
+              style={{
+                border: '2px dashed var(--overlay0)',
+                background: 'transparent',
+                color: 'var(--overlay0)',
+                fontSize: 10,
+                fontWeight: 600
+              }}
             >
-              <Icon size={13} />
+              A
             </button>
+          </div>
+          {PROFILE_ICON_GROUPS.map((group) => (
+            <div key={group.label} className="icon-picker-group">
+              <div className="icon-picker-group-label">{group.label}</div>
+              <div className="color-swatch-grid">
+                {Object.entries(group.icons).map(([key, Icon]) => (
+                  <button
+                    key={key}
+                    className={`color-swatch icon-swatch${draft.icon === key ? ' selected' : ''}`}
+                    onClick={() => onChange('icon', key)}
+                    title={key}
+                  >
+                    <Icon size={13} />
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </div>

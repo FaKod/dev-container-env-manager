@@ -1433,6 +1433,25 @@ input[type="checkbox"] { accent-color: var(--blue); }
 }
 .icon-swatch.selected { background: var(--surface2); }
 
+.icon-picker {
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--surface0);
+  border-radius: 8px;
+}
+.icon-picker::-webkit-scrollbar       { width: 4px; }
+.icon-picker::-webkit-scrollbar-track { background: transparent; }
+.icon-picker::-webkit-scrollbar-thumb { background: var(--surface1); border-radius: 2px; }
+
+.icon-picker-group-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--subtext1); margin-bottom: 5px;
+}
+
 .profile-avatar svg { display: block; }
 
 /* ── Port forward rows ─────────────────────────────────────────────────────── */
