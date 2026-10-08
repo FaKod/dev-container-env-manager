@@ -165,7 +165,11 @@ export function ProfileCard({ profile, compact = false }: Props): React.ReactEle
         <div className="profile-name" title={profile.name}>
           {profile.name}
         </div>
-        <StatusBadge status={status} />
+        <StatusBadge
+          status={status}
+          disabled={busy}
+          onToggle={isConnected || isConnecting ? handleDisconnect : handleConnect}
+        />
       </div>
       {!compact && (
         <>
@@ -240,7 +244,13 @@ export function ProfileCard({ profile, compact = false }: Props): React.ReactEle
   )
 }
 
-function StatusBadge({ status }: { status: string }): React.ReactElement {
+interface StatusBadgeProps {
+  status: string
+  disabled: boolean
+  onToggle: () => void
+}
+
+function StatusBadge({ status, disabled, onToggle }: StatusBadgeProps): React.ReactElement {
   const labels: Record<string, string> = {
     disconnected: 'Off',
     connecting: 'Connecting',
@@ -249,10 +259,16 @@ function StatusBadge({ status }: { status: string }): React.ReactElement {
     reconnecting: 'Reconnect',
     failed: 'Failed'
   }
+  const isOn = status !== 'disconnected' && status !== 'failed'
   return (
-    <span className={`status-badge ${status}`}>
+    <button
+      className={`status-badge status-toggle ${status}`}
+      onClick={(e) => { e.stopPropagation(); onToggle() }}
+      disabled={disabled}
+      title={isOn ? 'Disconnect' : 'Connect'}
+    >
       <span className="dot" />
       {labels[status] ?? status}
-    </span>
+    </button>
   )
 }
