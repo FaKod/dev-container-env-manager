@@ -4,10 +4,13 @@ import { ProfileManager } from './managers/ProfileManager'
 import { ConnectionManager } from './managers/ConnectionManager'
 import { TerminalManager } from './managers/TerminalManager'
 import { ContainerManager } from './managers/ContainerManager'
+import { OpenShellBackend } from './managers/OpenShellBackend'
+import { selectBackend } from './managers/ContainerBackend'
 import { EventLogManager } from './managers/EventLogManager'
 import { SessionManager } from './managers/SessionManager'
 import { setupIpcHandlers } from './ipcHandlers'
 import type { WindowBounds } from '../shared/types'
+import { hasEnvironment } from '../shared/backend'
 
 // ─── Manager initialization ───────────────────────────────────────────────────
 
@@ -16,6 +19,7 @@ const profileManager = new ProfileManager()
 const connectionManager = new ConnectionManager(eventLogManager)
 const terminalManager = new TerminalManager(eventLogManager)
 const containerManager = new ContainerManager(eventLogManager)
+const openShellBackend = new OpenShellBackend(eventLogManager)
 const sessionManager = new SessionManager()
 
 // ─── Window creation ──────────────────────────────────────────────────────────
@@ -141,6 +145,7 @@ function createWindow(): void {
     connectionManager,
     terminalManager,
     containerManager,
+    openShellBackend,
     eventLogManager,
     sessionManager,
     createDetachedTerminalWindow
@@ -196,13 +201,14 @@ app.on('window-all-closed', async () => {
     profiles.map(async (profile) => {
       const conn = connectionManager.getState(profile.id)
       if (!conn || conn.status === 'disconnected') return
-      if (!profile.container) return
+      if (!hasEnvironment(profile)) return
       const behavior = profile.connectionPolicy.onDisconnectBehavior ?? 'leave'
+      const backend = selectBackend(profile, containerManager, openShellBackend)
       try {
-        const state = await containerManager.getStatus(profile)
+        const state = await backend.getStatus(profile)
         if (state.status === 'running') {
-          if (behavior === 'stop') await containerManager.stop(profile)
-          else if (behavior === 'pause') await containerManager.pause(profile)
+          if (behavior === 'stop') await backend.stop(profile)
+          else if (behavior === 'pause') await backend.pause(profile)
           // 'leave' → do nothing
         }
       } catch { /* ignore errors on shutdown */ }

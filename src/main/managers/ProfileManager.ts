@@ -1,6 +1,7 @@
 import Store from 'electron-store'
 import { v4 as uuidv4 } from 'uuid'
 import type { Profile, Project } from '../../shared/types'
+import { sandboxSlug, SANDBOX_NAME_MAX_LEN } from '../../shared/backend'
 
 interface StoreSchema {
   profiles: Profile[]
@@ -66,6 +67,10 @@ export class ProfileManager {
     if (profile.container) {
       profile.container = { ...profile.container, name }
     }
+    // Sandbox name is fixed once set, so renaming the profile can't orphan the sandbox (D10)
+    if (profile.openshell && !profile.openshell.sandboxName) {
+      profile.openshell = { ...profile.openshell, sandboxName: this.uniqueSandboxName(name) }
+    }
 
     const profiles = this.getAll()
     profiles.push(profile)
@@ -89,9 +94,29 @@ export class ProfileManager {
     if (updated.container) {
       updated.container = { ...updated.container, name: updated.name }
     }
+    if (updated.openshell && !updated.openshell.sandboxName) {
+      updated.openshell = { ...updated.openshell, sandboxName: this.uniqueSandboxName(updated.name, id) }
+    }
     profiles[idx] = updated
     this.store.set('profiles', profiles)
     return updated
+  }
+
+  /** Slug of `name` that no other profile uses as its sandbox name (`-2`, `-3`, … on clashes). */
+  private uniqueSandboxName(name: string, exceptId?: string): string {
+    const taken = new Set(
+      this.getAll()
+        .filter((p) => p.id !== exceptId)
+        .map((p) => p.openshell?.sandboxName)
+        .filter(Boolean)
+    )
+    const base = sandboxSlug(name)
+    let candidate = base
+    for (let n = 2; taken.has(candidate); n++) {
+      const suffix = `-${n}`
+      candidate = base.slice(0, SANDBOX_NAME_MAX_LEN - suffix.length).replace(/-+$/, '') + suffix
+    }
+    return candidate
   }
 
   delete(id: string): void {
@@ -110,6 +135,10 @@ export class ProfileManager {
       name: `${source.name} (copy)`,
       createdAt: now,
       updatedAt: now
+    }
+    // A clone gets its own sandbox rather than sharing the source's
+    if (cloned.openshell) {
+      cloned.openshell.sandboxName = this.uniqueSandboxName(cloned.name)
     }
 
     const profiles = this.getAll()

@@ -4,6 +4,7 @@ import { useAppStore } from '../store/useAppStore'
 import { toast } from './Toast'
 import { showConfirm } from './ConfirmModal'
 import type { ContainerStatus } from '../../../shared/types'
+import { environmentImage, environmentName, hasEnvironment, isOpenShell } from '../../../shared/backend'
 
 interface Props {
   profileId: string
@@ -36,7 +37,7 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
   const prevContainerStatus = useRef<string | undefined>(undefined)
   useEffect(() => {
     if (connState?.status !== 'connected') return
-    if (!profile?.container) return
+    if (!profile || !hasEnvironment(profile)) return
 
     const poll = async (): Promise<void> => {
       try {
@@ -60,11 +61,29 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
   function containerAction(
     action: 'start' | 'stop' | 'restart' | 'remove' | 'recreate' | 'pause' | 'unpause'
   ): void {
+    const sandbox = profile ? isOpenShell(profile) : false
     if (action === 'remove') {
-      const name = profile?.container?.name ?? 'this container'
-      showConfirm(`Remove container "${name}"? This cannot be undone.`, () => {
-        void runContainerAction('remove')
-      })
+      const name = (profile && environmentName(profile)) ?? 'this container'
+      showConfirm(
+        sandbox
+          ? `Delete sandbox "${name}"? Files inside the sandbox that are not in a mounted folder are lost.`
+          : `Remove container "${name}"? This cannot be undone.`,
+        () => {
+          void runContainerAction('remove')
+        }
+      )
+      return
+    }
+    if (action === 'recreate' && sandbox) {
+      // Recreating a sandbox deletes it first, unlike a Docker container whose
+      // workspace is always a host mount.
+      const name = profile ? environmentName(profile) : ''
+      showConfirm(
+        `Recreate sandbox "${name}"? It is deleted first; files inside it that are not in a mounted folder are lost.`,
+        () => {
+          void runContainerAction('recreate')
+        }
+      )
       return
     }
     void runContainerAction(action)
@@ -192,13 +211,13 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
       )}
 
       {/* Container */}
-      {profile.container && (
+      {hasEnvironment(profile) && (
         <div className="status-section status-section-container">
-          <div className="status-section-title"><Box size={11} /> Container</div>
+          <div className="status-section-title"><Box size={11} /> {isOpenShell(profile) ? 'OpenShell sandbox' : 'Container'}</div>
           <div className="status-row">
             <span className="status-label">Name</span>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-              {profile.container.name}
+              {environmentName(profile)}
             </span>
           </div>
           <div className="status-row">
@@ -212,9 +231,9 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap'
               }}
-              title={profile.container.image}
+              title={environmentImage(profile)}
             >
-              {profile.container.image}
+              {environmentImage(profile)}
             </span>
           </div>
           <div className="status-row">

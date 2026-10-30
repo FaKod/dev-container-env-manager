@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Draft — waiting on decisions (see [Decisions](#2-decisions-required)) |
+| **Status** | In progress: Phases 1–2 implemented, Phase 3 terminal part implemented (see [§8](#8-implementation-status)) |
 | **Date** | 2026-10-29 |
 | **Source analysed** | [NVIDIA/OpenShell](https://github.com/NVIDIA/OpenShell) @ `d4e3226` (main, 2026-10-29), OpenShell 0.1.x |
 | **App version** | devenv-manager 0.0.73 |
@@ -467,7 +467,8 @@ export interface OpenShellConfig {
   gateway?: string                 // registered gateway name; omit = active gateway
   cliPath?: string                 // path to `openshell` on the target (local or remote host); default 'openshell'
   workspace?: string               // OpenShell workspace, default 'default'
-  sandboxName: string              // stable, set at profile creation (D10)
+  sandboxName: string              // stable, set at profile creation (D10); DNS-1123 label, max 19 chars
+  driver?: 'docker' | 'podman' | 'vm' // gateway compute driver; keys the driver config JSON (default 'docker')
   image?: string                   // --from; omit = gateway default image
   template?: string                // --template; mutually exclusive with image/cpu/memory/gpu/env
   mainCommand?: string[]           // after `--` (D8)
@@ -687,3 +688,144 @@ prove Docker profiles never depend on it (§0.1 rule 3).
 - Workspace is `/sandbox`, or the image `WORKDIR` if it is something other than `/`/`/sandbox` (must be writable).
 - `CMD`/`ENTRYPOINT` do not run. Put the start command in the profile's *main command*.
 - `--from` does not build Dockerfiles. Build with the gateway's engine (`docker build` / `podman build`) or push to a registry the gateway can pull from.
+
+## 8. Implementation status
+
+### 8.1 Done (2026-10-30, branch `feature/openshell-sandbox`)
+
+**Phase 1: seams, no behaviour change for Docker**
+
+- `Profile.backend` / `Profile.openshell` and the OpenShell config types (`src/shared/types.ts`).
+- `src/shared/backend.ts` holds the helpers. A profile counts as OpenShell only
+  when `backend === 'openshell'` **and** the `openshell` block exists;
+  everything else is Docker.
+- `ContainerBackend` interface plus `selectBackend()` (`src/main/managers/ContainerBackend.ts`).
+  `ContainerManager` only gained `implements ContainerBackend`.
+- `ipcHandlers` (launch + `container:*`) and the window-close handler in
+  `index.ts` resolve the backend per profile. For Docker profiles that is the
+  same `containerManager` instance as before.
+
+**Phase 2: OpenShell lifecycle + status, local and remote via SSH**
+
+- `OpenShellCli` (`src/main/managers/OpenShellCli.ts`):
+  - local runner: `execFile`, no shell;
+  - SSH runner: `ssh <batch opts> host '<quoted cli + args>'`, with a leading `~/` in `cliPath` kept expandable;
+  - JSON parsing, error classification (CLI missing / sandbox not found / gateway / ssh) with setup hints;
+  - phase→status mapping;
+  - `--color never`, `-g`, `--workspace`.
+- `OpenShellBackend` (`src/main/managers/OpenShellBackend.ts`):
+  - lazy preflight: `--version` ≥ 0.1.0, then `status -o json`. It is cached per target after it succeeds and runs before the tunnel opens on launch.
+  - `create` with image/template, resources, env, providers, policy file, labels, restart policy and main command;
+  - workspace bind mount merged into `--driver-config-json`;
+  - start (create if missing, resume if suspended);
+  - stop; suspend with fallback to stop (D9);
+  - restart (stop + start); delete (waits until gone); recreate; logs.
+  - `start` waits for a `Stopping`/`Deleting`/`Suspending` phase to settle first.
+- `ProfileManager` assigns a unique `sandboxName` (slug, max 19 chars) on
+  create when it is missing. It is kept on rename, and a clone gets its own.
+- Shared SSH helpers for new code: `src/main/managers/sshCommon.ts`. The three
+  existing Docker copies are deliberately left untouched for now (§0.1 rule 2).
+  Migrating them is a separate, regression-tested change.
+
+**Phase 3 (part): terminals**
+
+- `TerminalManager.buildCommand` has an early-return branch for OpenShell
+  `container` terminals:
+  - local: `openshell sandbox connect N`;
+  - remote: `ssh -t host 'openshell' … 'sandbox' 'connect' 'N'`.
+- The `local`/`ssh` contexts use the existing code.
+- File drop / image paste into a sandbox terminal returns "not staged" for now
+  (no upload yet).
+
+**Renderer (minimal, ahead of Phase 5)**
+
+- Connect / auto-connect open a `container` terminal for OpenShell profiles.
+- The status strip and status panel show the sandbox name, image/template and
+  status.
+- The section title reads "OpenShell sandbox".
+- Delete **and Recreate** ask for confirmation for sandboxes, because both lose
+  any files in the sandbox that aren't in a mounted folder.
+
+There is no editor UI yet. OpenShell profiles can only be created by importing
+JSON, for example:
+
+```json
+{
+  "name": "agent-sandbox",
+  "local": true,
+  "ssh": { "host": "", "forwards": [] },
+  "backend": "openshell",
+  "openshell": {
+    "sandboxName": "agent-sandbox",
+    "image": "ghcr.io/example/agent:latest",
+    "providers": ["github"],
+    "workspaceMount": { "localPath": "${cwd}", "targetPath": "/sandbox/project" }
+  }
+}
+```
+
+**Verification so far**
+
+- `npm run typecheck` and `npm run build` pass.
+- `npm run lint` cannot run: `eslint` is not installed in `node_modules`.
+- The new modules were exercised with a throwaway script against a **fake**
+  `openshell` shim and a fake `ssh` that runs the remote string through `sh -c`.
+  Covered:
+  - argument building, driver-config merge and mount validation;
+  - full lifecycle, including the suspend→stop fallback and waiting on transitional phases;
+  - `Error` phase reasons;
+  - missing CLI, locally and remotely;
+  - remote quoting of hostile env values and main commands;
+  - backend selection.
+- **Not yet verified against a real OpenShell gateway.** Phase 0 is still open.
+- The Docker/SSH regression checklist (§5.1) has **not** been run in the GUI yet.
+
+### 8.2 Decisions taken provisionally for the implementation
+
+These follow the recommendations in §2. They are still open for the user to
+confirm or change.
+
+| ID | Used |
+|---|---|
+| D1 | A: CLI |
+| D9 | `suspend`, falling back to `stop` on a plain CLI failure (logged as a warning) |
+| D10 | A: stored slug, stable on rename |
+| D11 | A: `backend` field + `openshell` block |
+| D12 | A: polling. The renderer's existing 30 s status poll is reused; no faster polling during transitions yet. |
+| D13 | Minimum 0.1.0. Older is a hard error; newer is allowed silently. |
+
+### 8.3 Findings from the OpenShell source (replace Phase 0 guesses)
+
+- **Sandbox names** are DNS-1123 labels with a **maximum of 19 characters**
+  (`openshell-server` `MAX_ROUTABLE_NAME_LEN`).
+- **`sandbox get -o json`:**
+  - top-level `phase` is title case (`"Ready"`, `"Suspended"`, …);
+  - `conditions[]` carries `{type, status, reason, message}`;
+  - `exit_code` is also present;
+  - a missing sandbox is a gRPC `NotFound` error ("sandbox not found") with a non-zero exit code.
+- **`status -o json`:** `status` is one of `connected`, `connected_http`,
+  `disconnected`, `not_configured`.
+- **`sandbox create`:**
+  - without a TTY and without a command, it detaches on its own;
+  - with `--detach` it never attaches;
+  - an empty command makes the supervisor start the image's login shell;
+  - missing required providers make non-interactive create **fail** instead of prompting (we pass `--no-auto-providers` to be explicit).
+- **`--template` conflicts** with `--from`, `--cpu`, `--memory`, `--gpu`,
+  `--env`, `--env-from` and `--driver-config-json`. A workspace mount therefore
+  can't be combined with a template; the backend reports that clearly.
+- **`--restart-policy`** accepts `never | on-failure | always`.
+- **Stop/start/suspend/resume** have no `--wait`. They return before the phase
+  settles, hence the waits in the backend.
+- **`logs`** takes `-n <lines>` (default 200), `--tail`, `--since`, `--source` and `--level`.
+- **Global flags:** `-g/--gateway`, `--workspace` (env `OPENSHELL_WORKSPACE`), `--color auto|always|never`.
+
+### 8.4 Next steps
+
+1. Phase 0 against a real gateway (local Docker driver, then a remote host).
+   Priorities: the bind-mount opt-in and its error text, `sandbox connect`
+   inside node-pty over `ssh -t`, and the suspend error text on the Docker
+   driver.
+2. Run the §5.1 Docker/SSH regression checklist in the app.
+3. Phase 3 remainder: upload fallback + "Sync", and file staging via `sandbox upload`.
+4. Phase 4: forwards.
+5. Phase 5: editor UI.

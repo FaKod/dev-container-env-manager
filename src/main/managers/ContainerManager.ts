@@ -2,10 +2,11 @@ import { exec } from 'child_process'
 import { promisify } from 'util'
 import type { Profile, ContainerState, ContainerStatus } from '../../shared/types'
 import type { EventLogManager } from './EventLogManager'
+import type { ContainerBackend } from './ContainerBackend'
 
 const execAsync = promisify(exec)
 
-export class ContainerManager {
+export class ContainerManager implements ContainerBackend {
   private logger: EventLogManager
 
   constructor(logger: EventLogManager) {

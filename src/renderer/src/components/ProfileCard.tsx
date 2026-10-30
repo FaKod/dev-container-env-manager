@@ -5,6 +5,7 @@ import { useAppStore } from '../store/useAppStore'
 import { toast } from './Toast'
 import { showConfirm } from './ConfirmModal'
 import type { Profile } from '../../../shared/types'
+import { hasEnvironment } from '../../../shared/backend'
 
 const AVATAR_COLORS = ['--blue', '--mauve', '--teal', '--peach', '--green', '--sapphire']
 
@@ -56,7 +57,7 @@ export function ProfileCard({ profile, compact = false }: Props): React.ReactEle
       setActiveProfile(profile.id)
 
       // Open container shell immediately (falls back to ssh if no container configured)
-      const ctx = profile.container ? 'container' : 'ssh'
+      const ctx = hasEnvironment(profile) ? 'container' : 'ssh'
       const session = await window.api.createTerminal(profile.id, ctx, 120, 36)
       addTerminal(session)
       setActiveTerminal(session.id)

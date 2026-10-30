@@ -11,6 +11,7 @@ import { ToastContainer, toast } from './components/Toast'
 import { ConfirmModal } from './components/ConfirmModal'
 import { useResizablePane } from './hooks/useResizablePane'
 import { hydrateFromLastSession, startSessionPersistence } from './sessionPersistence'
+import { hasEnvironment } from '../../shared/backend'
 
 export default function App(): React.ReactElement {
   const showProfileEditor = useAppStore((s) => s.showProfileEditor)
@@ -145,7 +146,7 @@ export default function App(): React.ReactElement {
     for (const profile of toConnect) {
       window.api.launch(profile.id)
         .then(async () => {
-          const ctx = profile.container ? 'container' : 'ssh'
+          const ctx = hasEnvironment(profile) ? 'container' : 'ssh'
           const session = await window.api.createTerminal(profile.id, ctx, 120, 36)
           addTerminal(session)
           setActiveTerminal(session.id)
@@ -251,7 +252,7 @@ function PanelToggleBar(): React.ReactElement {
             <span className="panel-status-dot" />
             {conn?.status ?? 'disconnected'}
           </span>
-          {profile.container && container && (
+          {hasEnvironment(profile) && container && (
             <span className={`panel-status-badge pstatus-container-${container.status ?? 'unknown'}`}>
               <span className="panel-status-dot" />
               {container.status ?? 'unknown'}

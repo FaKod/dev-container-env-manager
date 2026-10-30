@@ -14,6 +14,9 @@ import type {
   TerminalSession
 } from '../../shared/types'
 import type { EventLogManager } from './EventLogManager'
+import { OpenShellCli } from './OpenShellCli'
+import { sshInteractiveOptions } from './sshCommon'
+import { isOpenShell } from '../../shared/backend'
 
 const execAsync = promisify(exec)
 
@@ -35,10 +38,12 @@ export class TerminalManager extends EventEmitter {
   private logger: EventLogManager
   private suppressAutoDisconnect = new Set<string>()
   private imgCounter = 0
+  private openShellCli: OpenShellCli
 
   constructor(logger: EventLogManager) {
     super()
     this.logger = logger
+    this.openShellCli = new OpenShellCli(logger)
   }
 
   async createTerminal(
@@ -210,6 +215,18 @@ export class TerminalManager extends EventEmitter {
     profile: Profile,
     context: TerminalContext
   ): Promise<{ command: string; args: string[] }> {
+    // OpenShell sandbox shell (D8): `openshell sandbox connect`, directly for
+    // local profiles or via `ssh -t host` for remote ones. The 'local' and 'ssh'
+    // contexts fall through to the code below, which never touches containers.
+    if (isOpenShell(profile) && context === 'container') {
+      return this.openShellCli.commandFor(
+        profile,
+        ['sandbox', 'connect', profile.openshell!.sandboxName],
+        sshInteractiveOptions(profile),
+        true
+      )
+    }
+
     // Local profiles run everything on this machine — no SSH wrapper
     if (profile.local) {
       if (context === 'local' || context === 'ssh' || !profile.container) {
@@ -415,6 +432,10 @@ export class TerminalManager extends EventEmitter {
     targetPath: string
   ): Promise<{ path: string } | null> {
     const { profile, session } = entry
+    // Staging into OpenShell sandboxes (sandbox upload) is Phase 3 work; until
+    // then the renderer falls back to a plain-text paste.
+    if (isOpenShell(profile) && session.context === 'container') return null
+
     // A terminal targets a container only when it was opened in 'container' context.
     const hasContainer = !!profile.container && session.context === 'container'
 

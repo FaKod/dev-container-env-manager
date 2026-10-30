@@ -5,6 +5,8 @@ import type { ProfileManager } from './managers/ProfileManager'
 import type { ConnectionManager } from './managers/ConnectionManager'
 import type { TerminalManager } from './managers/TerminalManager'
 import type { ContainerManager } from './managers/ContainerManager'
+import type { OpenShellBackend } from './managers/OpenShellBackend'
+import { selectBackend, type ContainerBackend } from './managers/ContainerBackend'
 import type { EventLogManager } from './managers/EventLogManager'
 import type { SessionManager } from './managers/SessionManager'
 import type {
@@ -13,6 +15,7 @@ import type {
   PersistedSession,
   WindowBounds
 } from '../shared/types'
+import { environmentName, hasEnvironment, isOpenShell } from '../shared/backend'
 
 interface SetupOptions {
   mainWindow: BrowserWindow
@@ -20,6 +23,7 @@ interface SetupOptions {
   connectionManager: ConnectionManager
   terminalManager: TerminalManager
   containerManager: ContainerManager
+  openShellBackend: OpenShellBackend
   eventLogManager: EventLogManager
   sessionManager: SessionManager
   createDetachedTerminalWindow: (terminalId: string, bounds?: WindowBounds) => BrowserWindow
@@ -93,10 +97,14 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
     connectionManager,
     terminalManager,
     containerManager,
+    openShellBackend,
     eventLogManager,
     sessionManager,
     createDetachedTerminalWindow
   } = opts
+
+  // Docker profiles (no `backend` field) always resolve to containerManager.
+  const backendFor = (profile: Profile): ContainerBackend => selectBackend(profile, containerManager, openShellBackend)
 
   // Detached terminal windows, keyed by terminalId. A terminal is in this map
   // exactly while it lives in its own free-floating window.
@@ -196,13 +204,18 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
   async function launchProfile(profile: Profile): Promise<void> {
     const profileId = profile.id
 
+    // 0. OpenShell profiles: check CLI + gateway before opening anything, so a
+    //    missing setup fails fast with a hint. Docker profiles skip this.
+    if (isOpenShell(profile)) await openShellBackend.ensureReady(profile)
+
     // 1. Start SSH tunnel (port forwards)
     await connectionManager.connect(profile, mainWindow)
 
     // 2. Handle container lifecycle per existingContainerBehavior policy
-    if (profile.container) {
-      const current = await containerManager.getStatus(profile)
-      const name = profile.container.name
+    if (hasEnvironment(profile)) {
+      const backend = backendFor(profile)
+      const current = await backend.getStatus(profile)
+      const name = environmentName(profile)
       const behavior = profile.connectionPolicy.existingContainerBehavior ?? 'attach-or-recreate'
 
       eventLogManager.info('Launch', `Container "${name}" status: ${current.status}, behavior: ${behavior}`, profileId)
@@ -210,14 +223,14 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
       if (behavior === 'recreate') {
         if (current.status !== 'not-found') {
           eventLogManager.info('Launch', `Removing container "${name}" for recreate`, profileId)
-          await containerManager.remove(profile)
+          await backend.remove(profile)
         }
-        await containerManager.start(profile)
+        await backend.start(profile)
 
       } else if (behavior === 'attach') {
         if (current.status === 'paused') {
           eventLogManager.info('Launch', `Unpausing container "${name}"`, profileId)
-          await containerManager.unpause(profile)
+          await backend.unpause(profile)
         } else if (current.status !== 'running') {
           throw new Error(`Container "${name}" is not running (status: ${current.status})`)
         } else {
@@ -229,10 +242,10 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
           eventLogManager.info('Launch', `Attaching to running container "${name}"`, profileId)
         } else if (current.status === 'paused') {
           eventLogManager.info('Launch', `Unpausing container "${name}"`, profileId)
-          await containerManager.unpause(profile)
+          await backend.unpause(profile)
         } else if (current.status === 'stopped') {
           eventLogManager.info('Launch', `Starting stopped container "${name}"`, profileId)
-          await containerManager.start(profile)
+          await backend.start(profile)
         } else {
           throw new Error(`Container "${name}" does not exist (status: ${current.status})`)
         }
@@ -243,14 +256,14 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
           eventLogManager.info('Launch', `Attaching to running container "${name}"`, profileId)
         } else if (current.status === 'paused') {
           eventLogManager.info('Launch', `Unpausing container "${name}"`, profileId)
-          await containerManager.unpause(profile)
+          await backend.unpause(profile)
         } else {
           eventLogManager.info('Launch', `Starting/creating container "${name}"`, profileId)
-          await containerManager.start(profile)
+          await backend.start(profile)
         }
       }
 
-      const finalStatus = await containerManager.getStatus(profile)
+      const finalStatus = await backend.getStatus(profile)
       mainWindow.webContents.send('container:stateChanged', profileId, finalStatus)
     }
   }
@@ -477,39 +490,39 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
   ipcMain.handle('container:status', async (_e, profileId: string) => {
     const profile = profileManager.getById(profileId)
     if (!profile) throw new Error(`Profile ${profileId} not found`)
-    return containerManager.getStatus(profile)
+    return backendFor(profile).getStatus(profile)
   })
 
   ipcMain.handle('container:start', async (_e, profileId: string) => {
     const profile = profileManager.getById(profileId)
     if (!profile) throw new Error(`Profile ${profileId} not found`)
-    await containerManager.start(profile)
+    await backendFor(profile).start(profile)
     mainWindow.webContents.send('container:stateChanged', profileId, {
       profileId,
       status: 'running',
-      containerName: profile.container?.name
+      containerName: environmentName(profile)
     })
   })
 
   ipcMain.handle('container:stop', async (_e, profileId: string) => {
     const profile = profileManager.getById(profileId)
     if (!profile) throw new Error(`Profile ${profileId} not found`)
-    await containerManager.stop(profile)
+    await backendFor(profile).stop(profile)
     mainWindow.webContents.send('container:stateChanged', profileId, {
       profileId,
       status: 'stopped',
-      containerName: profile.container?.name
+      containerName: environmentName(profile)
     })
   })
 
   ipcMain.handle('container:restart', async (_e, profileId: string) => {
     const profile = profileManager.getById(profileId)
     if (!profile) throw new Error(`Profile ${profileId} not found`)
-    await containerManager.restart(profile)
+    await backendFor(profile).restart(profile)
     mainWindow.webContents.send('container:stateChanged', profileId, {
       profileId,
       status: 'running',
-      containerName: profile.container?.name
+      containerName: environmentName(profile)
     })
   })
 
@@ -518,11 +531,11 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
     if (!profile) throw new Error(`Profile ${profileId} not found`)
     // Kill terminals before removing so they don't reconnect to a new container
     terminalManager.destroyForProfile(profileId)
-    await containerManager.remove(profile)
+    await backendFor(profile).remove(profile)
     mainWindow.webContents.send('container:stateChanged', profileId, {
       profileId,
       status: 'not-found',
-      containerName: profile.container?.name
+      containerName: environmentName(profile)
     })
   })
 
@@ -531,36 +544,36 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
     if (!profile) throw new Error(`Profile ${profileId} not found`)
     // Kill terminals before recreating so they don't reconnect to the new container
     terminalManager.destroyForProfile(profileId)
-    await containerManager.recreate(profile)
+    await backendFor(profile).recreate(profile)
     mainWindow.webContents.send('container:stateChanged', profileId, {
       profileId,
       status: 'running',
-      containerName: profile.container?.name
+      containerName: environmentName(profile)
     })
   })
 
   ipcMain.handle('container:pause', async (_e, profileId: string) => {
     const profile = profileManager.getById(profileId)
     if (!profile) throw new Error(`Profile ${profileId} not found`)
-    await containerManager.pause(profile)
+    await backendFor(profile).pause(profile)
     mainWindow.webContents.send('container:stateChanged', profileId, {
-      profileId, status: 'paused', containerName: profile.container?.name
+      profileId, status: 'paused', containerName: environmentName(profile)
     })
   })
 
   ipcMain.handle('container:unpause', async (_e, profileId: string) => {
     const profile = profileManager.getById(profileId)
     if (!profile) throw new Error(`Profile ${profileId} not found`)
-    await containerManager.unpause(profile)
+    await backendFor(profile).unpause(profile)
     mainWindow.webContents.send('container:stateChanged', profileId, {
-      profileId, status: 'running', containerName: profile.container?.name
+      profileId, status: 'running', containerName: environmentName(profile)
     })
   })
 
   ipcMain.handle('container:logs', async (_e, profileId: string, lines: number) => {
     const profile = profileManager.getById(profileId)
     if (!profile) return ''
-    return containerManager.getLogs(profile, lines)
+    return backendFor(profile).getLogs(profile, lines)
   })
 
   ipcMain.handle(

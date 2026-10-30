@@ -43,6 +43,48 @@ export interface ContainerConfig {
   extraArgs?: string[]
 }
 
+// ─── OpenShell sandbox backend ────────────────────────────────────────────────
+// See Docs/openshell-sandbox-plan.md. Profiles without `backend` are Docker
+// profiles; the `openshell` block is only read when backend === 'openshell'.
+
+export type ProfileBackend = 'docker' | 'openshell'
+
+export interface OpenShellForward {
+  localPort: number     // listener on this machine
+  targetPort: number    // loopback port inside the sandbox
+  bindAddress?: string  // default 127.0.0.1
+}
+
+export interface OpenShellWorkspaceMount {
+  localPath: string   // path on the gateway host; supports ${cwd} / ${projectName}
+  targetPath: string  // must be below /sandbox, not /sandbox itself
+  readOnly?: boolean  // default false here (OpenShell's own default is true)
+}
+
+export interface OpenShellConfig {
+  gateway?: string                // registered gateway name; omit = active gateway
+  cliPath?: string                // `openshell` on the target (local or remote host); default 'openshell'
+  workspace?: string              // OpenShell workspace, default 'default'
+  sandboxName: string             // stable, set at profile creation (D10)
+  driver?: 'docker' | 'podman' | 'vm' // gateway compute driver, keys the driver config JSON; default 'docker'
+  image?: string                  // --from; omit = gateway default image
+  template?: string               // --template; excludes image/cpu/memory/gpu/env
+  mainCommand?: string[]          // after `--` (D8)
+  restartPolicy?: 'never' | 'on-failure' | 'always'
+  policyFile?: string             // --policy (D5)
+  policyPreset?: string           // D5 presets
+  providers?: string[]            // --provider (D6)
+  cpu?: string                    // e.g. '2', '500m'
+  memory?: string                 // e.g. '4Gi'
+  gpu?: number | true             // --gpu [COUNT]
+  env?: Record<string, string>    // non-secret only
+  labels?: Record<string, string>
+  workspaceMount?: OpenShellWorkspaceMount // D2-A; becomes a bind entry in driver config
+  uploads?: { localPath: string; sandboxPath?: string; gitIgnore?: boolean }[] // D2-B fallback
+  forwards?: OpenShellForward[]   // D7
+  driverConfigJson?: string       // advanced; requires gateway opt-in
+}
+
 export interface TerminalConfig {
   presentation: 'tab' | 'window' | 'pane'
   defaultContext: TerminalContext
@@ -84,6 +126,8 @@ export interface Profile {
   local?: boolean
   ssh: SSHConfig
   container?: ContainerConfig
+  backend?: ProfileBackend      // undefined === 'docker'
+  openshell?: OpenShellConfig
   terminal: TerminalConfig
   connectionPolicy: ConnectionPolicy
   workspace?: WorkspaceConfig
