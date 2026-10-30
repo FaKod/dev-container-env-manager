@@ -904,7 +904,7 @@ Still open from Phase 0:
 - two concurrent `connect`s, and closing the window while connected (only matters for profiles with a main command; all other terminals use `exec`);
 - upload (and the two-hop remote upload);
 - logs;
-- remote `forward service` over `ssh -tt`: no orphaned process on the host after the local `ssh` dies or the network drops (Phase 4, implemented; needs the real test).
+- remote `forward service` over `ssh -tt` when the **network** drops (Disconnect and app quit are verified clean, §8.4.1).
 
 Worth reporting upstream: `start` on `Error` wedging the sandbox in `Starting`;
 `start` on `Completed` failing with the auth-bundle error; `stop` on
@@ -932,6 +932,9 @@ gateway on an NVIDIA DGX Spark (arm64), reached by SSH (Tailscale name).
 | Local Docker profile (sysbox runtime, workspace mount) in the same instance | ✅ unchanged |
 | Session restore + Reconnect for a sandbox terminal (`hostname` shows the sandbox) | ✅ |
 | Workspace mount from the remote host (`workspaceMount`, gateway opt-in enabled) | ✅ Files of `/home/<user>/ostest` visible at `/sandbox/project` |
+| Port forward `localhost:8080 → host 127.0.0.1:18080 → sandbox :3000` (0.0.83) | ✅ `curl localhost:8080` on the laptop reaches a server in the sandbox |
+| Forward after Stop → Connect, sandbox starts in < 5 s (0.0.84 fix: start forwards while the tunnel is still `connecting`) | ✅ |
+| No leftover `forward service` processes on laptop or remote host after Disconnect and after quitting the app (`ssh -tt`) | ✅ |
 
 ### 8.5 Next steps
 

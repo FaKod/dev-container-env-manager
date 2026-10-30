@@ -49,8 +49,11 @@ export class ConnectionManager extends EventEmitter {
    */
   startSandboxForwards(profile: Profile): void {
     if (!isOpenShell(profile) || !profile.openshell!.forwards?.length) return
+    // Forwards open their own ssh sessions and don't need the profile's tunnel,
+    // which for remote profiles may still be 'connecting' (it only counts as
+    // connected after a few seconds). They just need a live connection entry.
     const status = this.connections.get(profile.id)?.state.status
-    if (status !== 'connected' && status !== 'degraded' && status !== 'reconnecting') return
+    if (!status || status === 'disconnected' || status === 'failed') return
     this.sandboxForwards.start(profile)
   }
 
