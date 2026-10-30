@@ -13,7 +13,7 @@
     "lint": "eslint src/",
     "format": "prettier --write src/",
     "dist": "node scripts/bump-version.js && npm run dist:build",
-    "dist:build": "electron-vite build && CC=x86_64-linux-gnu-gcc CXX=x86_64-linux-gnu-g++ LINK=x86_64-linux-gnu-g++ electron-builder --linux AppImage --x64",
+    "dist:build": "electron-vite build && rm -rf node_modules/node-pty/build && CC=x86_64-linux-gnu-gcc CXX=x86_64-linux-gnu-g++ LINK=x86_64-linux-gnu-g++ CPPFLAGS=\"-include $PWD/scripts/glibc-compat.h\" electron-builder --linux AppImage --x64 && node scripts/check-glibc.js",
     "dist:mac": "electron-vite build && electron-builder --mac dmg",
     "rebuild": "electron-rebuild -f -w node-pty",
     "postinstall": "electron-rebuild -f -w node-pty"

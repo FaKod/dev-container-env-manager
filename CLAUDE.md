@@ -59,3 +59,8 @@ To launch a built AppImage in a container (no display server required for testin
 
 `npm run dist` always builds the **x64** AppImage using the cross-compiler (works from any host arch).
 Output lands in `dist/`.
+
+node-pty is compiled against this container's glibc, which can be newer than users' machines.
+`dist:build` therefore force-includes `scripts/glibc-compat.h` (pins symbols that got new glibc
+versions) and runs `scripts/check-glibc.js`, which fails the build if `pty.node` needs glibc > 2.34.
+If that check fails after a toolchain update, pin the newly reported symbols in `glibc-compat.h`.
