@@ -880,6 +880,27 @@ Worth reporting upstream: `start` on `Error` wedging the sandbox in `Starting`;
 `Completed` / a main-process `Error` hanging or failing (the CLI waits for a
 `Stopped` the gateway never sets).
 
+### 8.4.1 App tests against a remote host (D3-C), 0.0.77–0.0.81, 2026-10-30
+
+Setup: AppImage on an x64 laptop with `--config-dir`; OpenShell 0.1.6 CLI and
+gateway on an NVIDIA DGX Spark (arm64), reached by SSH (Tailscale name).
+`cliPath` was not needed (`/usr/bin/openshell`).
+
+| Test | Result |
+|---|---|
+| Connect creates the sandbox on the remote host; terminal opens in the sandbox | ✅ |
+| Second terminal via "+" opens in the sandbox (after the `defaultContext` fix, 0.0.77) | ✅ |
+| `exit` in a terminal leaves the sandbox `Ready`, `restart_count` 0 | ✅ |
+| Resize (`stty size` follows the window), Ctrl-C | ✅ |
+| Reconnect reuses the existing sandbox | ✅ |
+| Main-shell restart (`restart-policy always`) keeps the sandbox; open terminals close | ✅ (expected) |
+| Start on a main-process Error (`restartPolicy: never`, `exit 1`) | ✅ (0.0.80) |
+| Pause (= stop on the Docker driver), Unpause; badge shows the real state (0.0.81) | ✅ |
+| Stop, Start, Restart, Recreate, Delete | ✅ |
+| Missing CLI (`cliPath: /nope`) → clear message, no hang | ✅ |
+| Local Docker profile (sysbox runtime, workspace mount) in the same instance | ✅ unchanged |
+| Session restore + Reconnect for a sandbox terminal (`hostname` shows the sandbox) | ✅ |
+
 ### 8.5 Next steps
 
 1. Finish Phase 0 (open items in §8.4): bind mounts, terminals in the app,
