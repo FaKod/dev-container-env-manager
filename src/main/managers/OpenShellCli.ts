@@ -83,6 +83,20 @@ export interface SandboxInfo {
   exit_code?: number | null
 }
 
+/**
+ * True when an Error phase only records that the main process exited non-zero
+ * (the gateway's `is_failed_main_process_result`), as opposed to an
+ * infrastructure error.
+ */
+export function isMainProcessResult(info: SandboxInfo): boolean {
+  return (
+    info.exit_code != null &&
+    (info.conditions ?? []).some(
+      (c) => c.type === 'Ready' && c.status?.toLowerCase() === 'false' && c.reason === 'MainProcessFailed'
+    )
+  )
+}
+
 /** Human-readable reason for an Error phase, taken from the sandbox conditions. */
 export function sandboxErrorReason(info: SandboxInfo): string | undefined {
   const conds = info.conditions ?? []

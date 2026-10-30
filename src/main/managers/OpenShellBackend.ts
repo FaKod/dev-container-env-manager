@@ -10,6 +10,7 @@ import {
   parseVersion,
   phaseToStatus,
   sandboxErrorReason,
+  isMainProcessResult,
   type SandboxInfo
 } from './OpenShellCli'
 import { sshTarget } from './sshCommon'
@@ -17,7 +18,6 @@ import { sshTarget } from './sshCommon'
 /** Creating a sandbox may pull an image first. */
 const CREATE_TIMEOUT_MS = 10 * 60_000
 const TRANSITION_TIMEOUT_MS = 2 * 60_000
-const STOP_SETTLE_TIMEOUT_MS = 20_000
 
 /**
  * OpenShell sandboxes as a container backend (Docs/openshell-sandbox-plan.md, Phase 2).
@@ -110,17 +110,26 @@ export class OpenShellBackend implements ContainerBackend {
 
   // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
-  /** Raw sandbox phase in lowercase (`ready`, `error`, …), or `not-found`. */
+  /**
+   * Raw sandbox phase in lowercase (`ready`, `stopped`, …) or `not-found`.
+   * Error is split in two, because the gateway treats them differently:
+   * `main-process-error` when the main process exited non-zero (it behaves like
+   * Completed), `error` for infrastructure errors.
+   */
   private async phase(profile: Profile): Promise<string> {
     const info = await this.getInfo(profile)
-    return info ? (info.phase ?? 'unknown').toLowerCase() : 'not-found'
+    if (!info) return 'not-found'
+    const phase = (info.phase ?? 'unknown').toLowerCase()
+    return phase === 'error' && isMainProcessResult(info) ? 'main-process-error' : phase
   }
 
   /**
    * Bring the sandbox to Ready, creating it if needed. The phase handling
-   * follows what the gateway accepts (OpenShell 0.1.6, plan §8.3):
-   * - Error: `start` is refused, or wedges the sandbox in Starting; stop first.
-   * - Completed: `start` is allowed but can fail and leave it in Error; then stop + start.
+   * follows what the gateway accepts (OpenShell 0.1.6, plan §8.4):
+   * - Infrastructure Error: `start` is refused until the sandbox is stopped.
+   * - Completed / main-process Error: the main process ended. The gateway counts
+   *   that as already stopped (`stop` changes nothing) and allows `start`, but
+   *   on the Docker driver that start can fail; see restartEnded().
    * - Stopping/Suspending/Deleting: let the transition finish, then decide.
    */
   async start(profile: Profile): Promise<void> {
@@ -147,23 +156,41 @@ export class OpenShellBackend implements ContainerBackend {
         break
       case 'error':
         this.logger.info('OpenShell', `Sandbox ${name} is in Error; stopping before start`, profile.id)
-        await this.stopSandbox(profile)
+        await this.cli.run(profile, ['sandbox', 'stop', name])
         await this.startStopped(profile)
         break
       case 'completed':
-        try {
-          await this.startStopped(profile)
-        } catch (err) {
-          if ((await this.phase(profile)) !== 'error') throw err
-          this.logger.warn('OpenShell', `Start after Completed failed, retrying via stop: ${errText(err)}`, profile.id)
-          await this.stopSandbox(profile)
-          await this.startStopped(profile)
-        }
+      case 'main-process-error':
+        await this.restartEnded(profile)
         break
       default: // stopped, unknown
         await this.startStopped(profile)
     }
     await this.waitUntilReady(profile)
+  }
+
+  /**
+   * Start a sandbox whose main process has ended. Observed on the Docker driver:
+   * the start can fail into an infrastructure Error (then stop + start works),
+   * or leave the sandbox stuck in Starting ("already running generation"),
+   * which only Recreate fixes.
+   */
+  private async restartEnded(profile: Profile): Promise<void> {
+    const name = this.config(profile).sandboxName
+    try {
+      await this.startStopped(profile)
+    } catch (err) {
+      if ((await this.phase(profile)) === 'error') {
+        this.logger.warn('OpenShell', `Restarting ${name} failed, retrying via stop: ${errText(err)}`, profile.id)
+        await this.cli.run(profile, ['sandbox', 'stop', name])
+        await this.startStopped(profile)
+        return
+      }
+      throw new Error(
+        `The main process of sandbox ${name} has ended and OpenShell could not restart it (${errText(err)}). ` +
+          'Use Recreate to start it fresh; files outside mounted folders are lost.'
+      )
+    }
   }
 
   private async startStopped(profile: Profile): Promise<void> {
@@ -189,34 +216,14 @@ export class OpenShellBackend implements ContainerBackend {
   async stop(profile: Profile): Promise<void> {
     const name = this.config(profile).sandboxName
     const phase = await this.phase(profile)
-    // Nothing to stop. `stop` on Completed doesn't return, so it must be skipped.
-    if (phase === 'not-found' || phase === 'stopped' || phase === 'completed') return
+    // Nothing to stop. When the main process has ended the gateway already counts
+    // the sandbox as stopped, and the CLI would wait for a Stopped that never comes.
+    if (phase === 'not-found' || phase === 'stopped' || phase === 'completed' || phase === 'main-process-error') return
     if (phase === 'provisioning' || phase === 'starting') {
       throw new Error(`Sandbox ${name} is still starting and can't be stopped yet. If it stays stuck, use Recreate.`)
     }
     this.logger.info('OpenShell', `Stopping sandbox ${name}`, profile.id)
-    await this.stopSandbox(profile)
-  }
-
-  /**
-   * `sandbox stop`, tolerating a CLI quirk (OpenShell 0.1.6): stopping a sandbox
-   * whose main process failed makes the CLI exit with "MainProcessFailed: …
-   * while waiting for Stopped", because its first status read still shows
-   * Error, although the gateway accepted the stop. So on failure, give the
-   * sandbox a moment to reach Stopped and only rethrow if it doesn't.
-   */
-  private async stopSandbox(profile: Profile): Promise<void> {
-    const name = this.config(profile).sandboxName
-    try {
-      await this.cli.run(profile, ['sandbox', 'stop', name])
-    } catch (err) {
-      try {
-        await this.waitFor(profile, (s) => s === 'stopped' || s === 'not-found', STOP_SETTLE_TIMEOUT_MS)
-      } catch {
-        throw err
-      }
-      this.logger.debug('OpenShell', `stop reported "${errText(err)}" but sandbox ${name} stopped`, profile.id)
-    }
+    await this.cli.run(profile, ['sandbox', 'stop', name])
   }
 
   /** D9: suspend if the driver supports it (the Docker driver doesn't), otherwise stop. */

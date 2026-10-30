@@ -755,11 +755,11 @@ prove Docker profiles never depend on it (§0.1 rule 3).
 **After Phase 0: phase-aware lifecycle**
 
 - `start()`:
-  - Error → stop, then start;
-  - Completed → start, and if that fails into Error, stop then start;
+  - infrastructure Error → stop, then start;
+  - Completed or main-process Error (the main process ended) → start; if that fails into an infrastructure Error, stop then start; otherwise an error suggesting Recreate;
   - Stopping / Suspending / Deleting → wait, then decide;
   - in all cases it waits until the sandbox is Ready, with an error that suggests Recreate if it stays in Starting.
-- `stop()` skips Stopped and Completed, and refuses Starting with a clear message.
+- `stop()` skips Stopped, Completed and main-process Error (the gateway counts them as stopped), and refuses Starting with a clear message.
 - Sandboxes without a main command are created with `--restart-policy always`.
 
 **Renderer (minimal, ahead of Phase 5)**
@@ -860,7 +860,8 @@ confirm or change.
 | `--restart-policy always` + `exit` in `connect` | Shell restarts, phase stays `Ready`, `restart_count` 1 | Default when there is no main command |
 | Open `exec` terminals during a main-process restart | Closed: *"exec relay closed before the command reported an exit status"*. The sandbox stays `Ready`; a new terminal works immediately. | Acceptable. The app itself never attaches to the main shell, so this only happens through an external `connect` + `exit`. |
 | `start` on `Error` | Refused (*"stop the sandbox before retrying start"*). Once it also left the sandbox **stuck in `Starting`** (*"Docker sandbox is already running generation …"*). | `start()` stops first |
-| `stop` on `Error` after the main process failed (`restart_policy: never`, `exit 1`) | The CLI exits with *"MainProcessFailed: Canonical main process exited with status 1 while waiting for Stopped"*: its first status read still shows `Error`. The gateway accepted the stop, and the sandbox reaches `Stopped` right after. | `stopSandbox()`: on a failed stop, wait up to 20 s for `Stopped` and only report the error if it doesn't come. Verified in the app: Start on a failed sandbox works. |
+| **Two kinds of `Error`** (from the gateway source, `quiesce_sandbox` / `start_sandbox_with_intent`) | *Main-process Error*: the main process exited non-zero (condition `MainProcessFailed`, `exit_code` set). The gateway treats it like `Completed`, i.e. already stopped: `stop` changes nothing, but the CLI then waits for `Stopped` and fails with *"MainProcessFailed: … while waiting for Stopped"* (or hangs, for `Completed`). `start` is allowed directly. *Infrastructure Error*: anything else; `start` requires `stop` first. | `phase()` reports `main-process-error` separately. `stop()` skips it. `start()` tries `start` directly (`restartEnded()`). |
+| `start` on a main-process Error / `Completed` (Docker driver) | Observed twice: it either fails into an infrastructure Error (then `stop` → `start` works), or leaves the sandbox stuck in `Starting` (*"already running generation"*). Probably the settled `stop` never stops the old container. | `restartEnded()`: on failure, if the sandbox is now in an infrastructure Error, `stop` → `start`; otherwise an error pointing to **Recreate**. Only reachable with `restartPolicy` `never`/`on-failure`, since the app's default is `always`. |
 | `stop` on `Starting` | Refused (*"must be Ready, Suspended, Error, or in an automatic restart to stop"*) | Clear error, suggests Recreate |
 | `start` on `Completed` | Allowed, but **failed** (*"supervisor authentication bundle does not match runtime session"*) and went to `Error`. Then `stop` → `start` → `Ready` worked. Likely an OpenShell bug. | `start()` retries via stop |
 | `stop` on `Completed` | **Does not return** | `stop()` skips Completed / Stopped |
@@ -876,8 +877,8 @@ Still open from Phase 0:
 
 Worth reporting upstream: `start` on `Error` wedging the sandbox in `Starting`;
 `start` on `Completed` failing with the auth-bundle error; `stop` on
-`Completed` hanging; `stop` on a main-process `Error` failing although the
-sandbox stops.
+`Completed` / a main-process `Error` hanging or failing (the CLI waits for a
+`Stopped` the gateway never sets).
 
 ### 8.5 Next steps
 
