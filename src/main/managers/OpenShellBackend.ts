@@ -283,7 +283,17 @@ export class OpenShellBackend implements ContainerBackend {
   private async create(profile: Profile): Promise<void> {
     const args = this.buildCreateArgs(profile)
     this.logger.info('OpenShell', `Creating sandbox: openshell ${args.join(' ')}`, profile.id)
-    await this.cli.run(profile, args, CREATE_TIMEOUT_MS)
+    try {
+      await this.cli.run(profile, args, CREATE_TIMEOUT_MS)
+    } catch (err) {
+      // Folder mounts / driver config are off by default on a gateway (D2, D4).
+      // OpenShell 0.1.6 says: "caller driver config is disabled; a gateway
+      // administrator must enable allow_driver_config".
+      if (/allow_driver_config|enable_bind_mounts|bind mounts? (are|is) (disabled|not enabled)/i.test(errText(err))) {
+        throw new Error(driverConfigDisabledHint(profile, errText(err)))
+      }
+      throw err
+    }
   }
 
   /** Poll status until `done` holds, or give up after `timeoutMs`. */
@@ -383,6 +393,19 @@ export class OpenShellBackend implements ContainerBackend {
 
     return Object.keys(config).length > 0 ? JSON.stringify(config) : undefined
   }
+}
+
+/** How to enable folder mounts on the gateway the profile uses. */
+export function driverConfigDisabledHint(profile: Profile, detail: string): string {
+  const driver = profile.openshell?.driver ?? 'docker'
+  const where = profile.local ? 'on this machine' : `on ${profile.ssh.host}`
+  return (
+    `The OpenShell gateway ${where} does not allow folder mounts yet. ` +
+    `In ~/.config/openshell/gateway.toml ${where}, set allow_driver_config = true and enable_bind_mounts = true ` +
+    `under [openshell.drivers.${driver}], and enabled = false under [openshell.drivers.${driver}.resource_admission] ` +
+    '(a new file also needs [openshell] version = 2). Then restart the gateway: systemctl --user restart openshell-gateway. ' +
+    `Or remove the workspace mount from the profile. (OpenShell: ${detail})`
+  )
 }
 
 function errText(err: unknown): string {

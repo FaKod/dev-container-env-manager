@@ -579,10 +579,10 @@ Verify the assumptions this plan depends on, on a local Docker-driver gateway:
 - [x] `openshell sandbox get N -o json` shape: where phase, conditions/error reason and host-key fingerprint live; exit code when the sandbox doesn't exist.
 - [x] `openshell sandbox connect N`: exit behaviour. **It attaches to the main process**; see §8.4. *(resize inside node-pty and concurrent connects: still open)*
 - [ ] `openshell forward service … --local` stays in the foreground, survives idle, and exits cleanly on SIGTERM (D7-A).
-- [ ] Bind mount on a local Docker gateway with the D2 opt-in: read/write works, live changes visible both ways.
-- [ ] File ownership in the mounted folder as seen from the sandbox (UID 1000 vs host user) and on the host after the sandbox writes.
+- [x] Bind mount on a Docker gateway with the D2 opt-in: read/write works, live changes visible both ways. *(DGX Spark, see §8.4)*
+- [x] File ownership in the mounted folder as seen from the sandbox (UID 1000 vs host user) and on the host after the sandbox writes.
 - [ ] How to learn the gateway's compute driver (to pick the `docker`/`podman`/`vm` JSON key), and whether bind-mount opt-in is detectable before create.
-- [ ] Exact error text when creating with a bind mount on a gateway that has **not** opted in.
+- [x] Exact error text when creating with a bind mount on a gateway that has **not** opted in.
 - [ ] `sandbox upload` speed/behaviour for a typical repo; download path (D2 fallback).
 - [x] `sandbox suspend` support on Docker driver (D9): **not supported** (see §8.4).
 - [x] Exact `sandbox exec` TTY flags (D8-B): `sandbox exec N --tty -- <cmd>` gives an independent shell.
@@ -866,14 +866,16 @@ confirm or change.
 | `start` on `Completed` | Allowed, but **failed** (*"supervisor authentication bundle does not match runtime session"*) and went to `Error`. Then `stop` → `start` → `Ready` worked. Likely an OpenShell bug. | `start()` retries via stop |
 | `stop` on `Completed` | **Does not return** | `stop()` skips Completed / Stopped |
 | `delete` while stuck in `Starting` | Works: *"deletion accepted; cleanup is pending"*, gone within 3 s | Recreate is the way out of a stuck sandbox |
+| Bind mount without the opt-in | *"caller driver config is disabled; a gateway administrator must enable allow_driver_config"*, exit 1 | `create()` turns it into a hint with the `gateway.toml` settings, the host and the restart command |
+| Opt-in on an Ubuntu package install | `~/.config/openshell/gateway.toml` did not exist (built-in defaults). A new file with `[openshell] version = 2` plus the D2 tables passed `openshell-gateway config preflight`; then `systemctl --user restart openshell-gateway`. All sandboxes survived the restart. | Documented in the hint; Phase 6 README section |
+| Bind mount with the opt-in | `--driver-config-json '{"docker":{"mounts":[{"type":"bind",…,"target":"/sandbox/project","read_only":false}]}}'` works. Read and write in both directions, changes visible immediately. | ✓ |
+| Ownership | Sandbox user is `uid=1000(ubuntu)`; files it creates are owned by 1000:1000 on the host. That matched the host user here (1000); a host user with another uid gets files owned by 1000. | Mention in the editor's mount warning (Phase 5) |
 
 Still open from Phase 0:
-- resize inside node-pty;
-- two concurrent `connect`s, and closing the window while connected;
-- bind mounts (opt-in and its error text, ownership);
-- upload;
+- two concurrent `connect`s, and closing the window while connected (only matters for profiles with a main command; all other terminals use `exec`);
+- upload (and the two-hop remote upload);
 - logs;
-- all remote checks.
+- remote `forward service`: no orphaned process on the host after the local `ssh` dies (Phase 4).
 
 Worth reporting upstream: `start` on `Error` wedging the sandbox in `Starting`;
 `start` on `Completed` failing with the auth-bundle error; `stop` on
@@ -900,6 +902,7 @@ gateway on an NVIDIA DGX Spark (arm64), reached by SSH (Tailscale name).
 | Missing CLI (`cliPath: /nope`) → clear message, no hang | ✅ |
 | Local Docker profile (sysbox runtime, workspace mount) in the same instance | ✅ unchanged |
 | Session restore + Reconnect for a sandbox terminal (`hostname` shows the sandbox) | ✅ |
+| Workspace mount from the remote host (`workspaceMount`, gateway opt-in enabled) | ✅ Files of `/home/<user>/ostest` visible at `/sandbox/project` |
 
 ### 8.5 Next steps
 
