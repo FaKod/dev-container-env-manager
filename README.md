@@ -99,6 +99,26 @@ npm run dist:mac
 
 Produces separate `.dmg` files for Intel (`x64`) and Apple Silicon (`arm64`).
 
+### Run a second instance with its own config
+
+To try a build without touching the instance you work in, start it with a
+separate config folder. It then has its own profiles and its own saved
+terminal session:
+
+```bash
+npm run dev -- --config-dir=~/devenv-test
+# or
+DEVENV_CONFIG_DIR=~/devenv-test npm run dev
+# or a built AppImage
+"dist/FaKods Legendary DevContainer Manager-<version>.AppImage" --config-dir=~/devenv-test
+```
+
+The folder is created if it doesn't exist. Its name is shown in the window
+title, e.g. `… — DevEnv Manager [devenv-test]`. Only the app's own data is
+separated. Containers, sandboxes and local ports are shared with the machine,
+so don't connect profiles with the same container name or ports in both
+instances at the same time.
+
 ---
 
 ## Architecture

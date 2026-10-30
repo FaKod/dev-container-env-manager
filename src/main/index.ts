@@ -1,5 +1,5 @@
 import { app, BrowserWindow, shell, Menu, screen } from 'electron'
-import { join } from 'path'
+import { basename, join } from 'path'
 import { ProfileManager } from './managers/ProfileManager'
 import { ConnectionManager } from './managers/ConnectionManager'
 import { TerminalManager } from './managers/TerminalManager'
@@ -9,8 +9,14 @@ import { selectBackend } from './managers/ContainerBackend'
 import { EventLogManager } from './managers/EventLogManager'
 import { SessionManager } from './managers/SessionManager'
 import { setupIpcHandlers } from './ipcHandlers'
+import { applyConfigDirOverride } from './configDir'
 import type { WindowBounds } from '../shared/types'
 import { hasEnvironment } from '../shared/backend'
+
+// ─── Config folder ────────────────────────────────────────────────────────────
+
+// Before any store is created: lets a second instance use its own profiles/session.
+const configDir = applyConfigDirOverride()
 
 // ─── Manager initialization ───────────────────────────────────────────────────
 
@@ -118,6 +124,16 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => mainWindow!.show())
 
+  // Mark windows of an instance running on its own config folder, so it can't
+  // be mistaken for the main one.
+  if (configDir) {
+    const tag = ` [${basename(configDir)}]`
+    mainWindow.on('page-title-updated', (e, title) => {
+      e.preventDefault()
+      mainWindow?.setTitle(title + tag)
+    })
+  }
+
   // Open external links in the system browser, not in Electron
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
@@ -162,6 +178,7 @@ function createWindow(): void {
   }
 
   eventLogManager.info('App', 'FaKods Legendary DevContainer Manager started')
+  if (configDir) eventLogManager.info('App', `Using config folder ${configDir}`)
   if (restoredCount > 0) {
     eventLogManager.info(
       'App',
