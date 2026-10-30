@@ -383,7 +383,21 @@ shell on the remote host).
 
 **Recommendation:** A. Map custom `shell` to B only if a user needs it. Hide the
 `ssh` context for **local** OpenShell profiles; keep it for remote ones (D3-C).
-**Decision:** ☐ A ☐ B; ssh context ☐ hide ☐ host shell — _______
+
+**Decision (2026-10-30, after Phase 0): A + B, like Docker's `smart` mode.**
+Phase 0 showed that `sandbox connect` **attaches to the main process**, and
+exiting it ends the sandbox (§8.4). So:
+
+- Terminals use `sandbox exec N --tty -- <shell>` (B). `exit` there never
+  affects the sandbox.
+- Only the first terminal of a profile **with a main command** uses `connect`
+  (A), to attach to that command.
+- Default shell: `bash`, falling back to `sh`. It can be overridden with
+  `openshell.shell`.
+- Sandboxes without a main command are created with `--restart-policy always`,
+  so an accidental attach + `exit` restarts the shell instead of ending the
+  sandbox.
+- ssh context: unchanged (local profiles: host shell; remote: the SSH host).
 
 ### D9 — Pause / disconnect semantics
 
@@ -561,17 +575,17 @@ fields such as image, env and paths are user-controlled.
 
 Verify the assumptions this plan depends on, on a local Docker-driver gateway:
 
-- [ ] `openshell sandbox create --detach` **without** a main command keeps the sandbox `READY` (retained shell) and returns.
-- [ ] `openshell sandbox get N -o json` shape: where phase, conditions/error reason and host-key fingerprint live; exit code when the sandbox doesn't exist.
-- [ ] `openshell sandbox connect N` inside node-pty: resize (SIGWINCH) propagates, exit behaviour, multiple concurrent connects.
+- [x] `openshell sandbox create --detach` **without** a main command keeps the sandbox `READY` (retained shell) and returns. *(0.1.6: returns in ~5 s with the sandbox Ready; see §8.4)*
+- [x] `openshell sandbox get N -o json` shape: where phase, conditions/error reason and host-key fingerprint live; exit code when the sandbox doesn't exist.
+- [x] `openshell sandbox connect N`: exit behaviour. **It attaches to the main process**; see §8.4. *(resize inside node-pty and concurrent connects: still open)*
 - [ ] `openshell forward service … --local` stays in the foreground, survives idle, and exits cleanly on SIGTERM (D7-A).
 - [ ] Bind mount on a local Docker gateway with the D2 opt-in: read/write works, live changes visible both ways.
 - [ ] File ownership in the mounted folder as seen from the sandbox (UID 1000 vs host user) and on the host after the sandbox writes.
 - [ ] How to learn the gateway's compute driver (to pick the `docker`/`podman`/`vm` JSON key), and whether bind-mount opt-in is detectable before create.
 - [ ] Exact error text when creating with a bind mount on a gateway that has **not** opted in.
 - [ ] `sandbox upload` speed/behaviour for a typical repo; download path (D2 fallback).
-- [ ] `sandbox suspend` support on Docker driver (D9).
-- [ ] Exact `sandbox exec` TTY flags (D8-B).
+- [x] `sandbox suspend` support on Docker driver (D9): **not supported** (see §8.4).
+- [x] Exact `sandbox exec` TTY flags (D8-B): `sandbox exec N --tty -- <cmd>` gives an independent shell.
 - [ ] Remote (D3-C): `ssh host openshell --version` and `… -o json` with a non-login shell (PATH, clean stdout, exit codes over SSH).
 - [ ] Remote (D3-C): `ssh -t host openshell sandbox connect N` in node-pty: resize, Ctrl-C, exit.
 - [ ] Remote (D3-C): `ssh host openshell forward service …` ends on the remote host when the local `ssh` is killed (no orphans).
@@ -727,15 +741,26 @@ prove Docker profiles never depend on it (§0.1 rule 3).
   existing Docker copies are deliberately left untouched for now (§0.1 rule 2).
   Migrating them is a separate, regression-tested change.
 
-**Phase 3 (part): terminals**
+**Phase 3 (part): terminals** (revised after Phase 0, see D8)
 
 - `TerminalManager.buildCommand` has an early-return branch for OpenShell
   `container` terminals:
-  - local: `openshell sandbox connect N`;
-  - remote: `ssh -t host 'openshell' … 'sandbox' 'connect' 'N'`.
+  - normally: `openshell sandbox exec N --tty -- <shell>`;
+  - only the first terminal of a profile with a main command: `openshell sandbox connect N`;
+  - remote profiles: the same command wrapped in `ssh -t host '…'`.
 - The `local`/`ssh` contexts use the existing code.
 - File drop / image paste into a sandbox terminal returns "not staged" for now
   (no upload yet).
+
+**After Phase 0: phase-aware lifecycle**
+
+- `start()`:
+  - Error → stop, then start;
+  - Completed → start, and if that fails into Error, stop then start;
+  - Stopping / Suspending / Deleting → wait, then decide;
+  - in all cases it waits until the sandbox is Ready, with an error that suggests Recreate if it stays in Starting.
+- `stop()` skips Stopped and Completed, and refuses Starting with a clear message.
+- Sandboxes without a main command are created with `--restart-policy always`.
 
 **Renderer (minimal, ahead of Phase 5)**
 
@@ -819,12 +844,42 @@ confirm or change.
 - **`logs`** takes `-n <lines>` (default 200), `--tail`, `--since`, `--source` and `--level`.
 - **Global flags:** `-g/--gateway`, `--workspace` (env `OPENSHELL_WORKSPACE`), `--color auto|always|never`.
 
-### 8.4 Next steps
+### 8.4 Phase 0 results (OpenShell 0.1.6, local Docker-driver gateway, 2026-10-30)
 
-1. Phase 0 against a real gateway (local Docker driver, then a remote host).
-   Priorities: the bind-mount opt-in and its error text, `sandbox connect`
-   inside node-pty over `ssh -t`, and the suspend error text on the Docker
-   driver.
+| Check | Result | Consequence in the app |
+|---|---|---|
+| `status -o json` | `{"status":"connected", "version":"0.1.6", "gateway":"openshell", …}` | Preflight check matches |
+| Compute driver | Not shown by `status` or `gateway list` | Profile field `openshell.driver` (default `docker`) stays |
+| `create --detach --no-auto-providers` | Returns after ~5 s, phase already `Ready` | ✓ |
+| `get -o json` | As read from the source: `phase`, `conditions[]`, `exit_code`, `restart_count`, `restart_policy` | ✓ |
+| `get` of a missing sandbox | `× code: 'Some requested entity was not found', message: "sandbox not found"`, exit 1 | Classified as not-found ✓ |
+| `suspend` / `resume` | `compute driver does not support sandbox suspend`, exit 1 | Pause falls back to stop; Unpause starts ✓ |
+| `stop` / `start` from Ready | Synchronous: the phase is `Stopped` / `Ready` when the command returns | ✓ |
+| **`connect`** | **Attaches to the main process** (the login shell when there is no main command). Ctrl-D / Ctrl-P Ctrl-Q detach. `exit` ends the main process: exit 0 → `Completed`, non-zero → `Error` (`restart_policy: never`). | Terminals use `exec` (D8 decision) |
+| `exec N --tty -- bash` | Independent shell; `exit` leaves the sandbox `Ready` | Default terminal command |
+| `--restart-policy always` + `exit` in `connect` | Shell restarts, phase stays `Ready`, `restart_count` 1 | Default when there is no main command |
+| `start` on `Error` | Refused (*"stop the sandbox before retrying start"*). Once it also left the sandbox **stuck in `Starting`** (*"Docker sandbox is already running generation …"*). | `start()` stops first |
+| `stop` on `Starting` | Refused (*"must be Ready, Suspended, Error, or in an automatic restart to stop"*) | Clear error, suggests Recreate |
+| `start` on `Completed` | Allowed, but **failed** (*"supervisor authentication bundle does not match runtime session"*) and went to `Error`. Then `stop` → `start` → `Ready` worked. Likely an OpenShell bug. | `start()` retries via stop |
+| `stop` on `Completed` | **Does not return** | `stop()` skips Completed / Stopped |
+| `delete` while stuck in `Starting` | Works: *"deletion accepted; cleanup is pending"*, gone within 3 s | Recreate is the way out of a stuck sandbox |
+
+Still open from Phase 0:
+- resize inside node-pty;
+- two concurrent `connect`s, and closing the window while connected;
+- bind mounts (opt-in and its error text, ownership);
+- upload;
+- logs;
+- all remote checks.
+
+Worth reporting upstream: `start` on `Error` wedging the sandbox in `Starting`;
+`start` on `Completed` failing with the auth-bundle error; `stop` on
+`Completed` hanging.
+
+### 8.5 Next steps
+
+1. Finish Phase 0 (open items in §8.4): bind mounts, terminals in the app,
+   then a remote host.
 2. Run the §5.1 Docker/SSH regression checklist in the app.
 3. Phase 3 remainder: upload fallback + "Sync", and file staging via `sandbox upload`.
 4. Phase 4: forwards.

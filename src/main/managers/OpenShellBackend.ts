@@ -109,35 +109,95 @@ export class OpenShellBackend implements ContainerBackend {
 
   // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
+  /** Raw sandbox phase in lowercase (`ready`, `error`, …), or `not-found`. */
+  private async phase(profile: Profile): Promise<string> {
+    const info = await this.getInfo(profile)
+    return info ? (info.phase ?? 'unknown').toLowerCase() : 'not-found'
+  }
+
+  /**
+   * Bring the sandbox to Ready, creating it if needed. The phase handling
+   * follows what the gateway accepts (OpenShell 0.1.6, plan §8.3):
+   * - Error: `start` is refused, or wedges the sandbox in Starting; stop first.
+   * - Completed: `start` is allowed but can fail and leave it in Error; then stop + start.
+   * - Stopping/Suspending/Deleting: let the transition finish, then decide.
+   */
   async start(profile: Profile): Promise<void> {
     const name = this.config(profile).sandboxName
     await this.ensureReady(profile)
-    let { status } = await this.getStatus(profile)
-    if (status === 'stopping') {
-      // stop/suspend/delete return before the phase settles; let it finish first
+    let phase = await this.phase(profile)
+    if (phase === 'stopping' || phase === 'suspending' || phase === 'deleting') {
       await this.waitFor(profile, (s) => s !== 'stopping')
-      status = (await this.getStatus(profile)).status
+      phase = await this.phase(profile)
     }
 
-    if (status === 'not-found') {
-      await this.create(profile)
-    } else if (status === 'paused') {
-      this.logger.info('OpenShell', `Resuming sandbox ${name}`, profile.id)
-      await this.cli.run(profile, ['sandbox', 'resume', name])
-    } else if (status === 'stopped' || status === 'failed' || status === 'unknown') {
-      this.logger.info('OpenShell', `Starting sandbox ${name}`, profile.id)
-      await this.cli.run(profile, ['sandbox', 'start', name])
+    switch (phase) {
+      case 'not-found':
+        await this.create(profile)
+        break
+      case 'ready':
+        return
+      case 'provisioning':
+      case 'starting':
+        break // already on its way; wait below
+      case 'suspended':
+        this.logger.info('OpenShell', `Resuming sandbox ${name}`, profile.id)
+        await this.cli.run(profile, ['sandbox', 'resume', name])
+        break
+      case 'error':
+        this.logger.info('OpenShell', `Sandbox ${name} is in Error; stopping before start`, profile.id)
+        await this.cli.run(profile, ['sandbox', 'stop', name])
+        await this.startStopped(profile)
+        break
+      case 'completed':
+        try {
+          await this.startStopped(profile)
+        } catch (err) {
+          if ((await this.phase(profile)) !== 'error') throw err
+          this.logger.warn('OpenShell', `Start after Completed failed, retrying via stop: ${errText(err)}`, profile.id)
+          await this.cli.run(profile, ['sandbox', 'stop', name])
+          await this.startStopped(profile)
+        }
+        break
+      default: // stopped, unknown
+        await this.startStopped(profile)
     }
-    // running / starting: nothing to do
+    await this.waitUntilReady(profile)
+  }
+
+  private async startStopped(profile: Profile): Promise<void> {
+    const name = this.config(profile).sandboxName
+    this.logger.info('OpenShell', `Starting sandbox ${name}`, profile.id)
+    await this.cli.run(profile, ['sandbox', 'start', name])
+  }
+
+  /** Terminals can only `exec` into a Ready sandbox, so start() returns only once it is. */
+  private async waitUntilReady(profile: Profile): Promise<void> {
+    const name = this.config(profile).sandboxName
+    try {
+      await this.waitFor(profile, (s) => s === 'running' || s === 'failed' || s === 'stopped' || s === 'not-found')
+    } catch {
+      throw new Error(`Sandbox ${name} did not become ready in time. If it stays in Starting, use Recreate.`)
+    }
+    const state = await this.getStatus(profile)
+    if (state.status !== 'running') {
+      throw new Error(`Sandbox ${name} did not start (status: ${state.status}${state.error ? `, ${state.error}` : ''})`)
+    }
   }
 
   async stop(profile: Profile): Promise<void> {
     const name = this.config(profile).sandboxName
+    const phase = await this.phase(profile)
+    // Nothing to stop. `stop` on Completed doesn't return, so it must be skipped.
+    if (phase === 'not-found' || phase === 'stopped' || phase === 'completed') return
+    if (phase === 'provisioning' || phase === 'starting') {
+      throw new Error(`Sandbox ${name} is still starting and can't be stopped yet. If it stays stuck, use Recreate.`)
+    }
     this.logger.info('OpenShell', `Stopping sandbox ${name}`, profile.id)
     await this.cli.run(profile, ['sandbox', 'stop', name])
   }
 
-  /** D9: suspend if the driver supports it, otherwise stop (workspace is kept either way). */
+  /** D9: suspend if the driver supports it (the Docker driver doesn't), otherwise stop. */
   async pause(profile: Profile): Promise<void> {
     const name = this.config(profile).sandboxName
     this.logger.info('OpenShell', `Suspending sandbox ${name}`, profile.id)
@@ -151,22 +211,13 @@ export class OpenShellBackend implements ContainerBackend {
   }
 
   async unpause(profile: Profile): Promise<void> {
-    const name = this.config(profile).sandboxName
-    const { status } = await this.getStatus(profile)
-    if (status === 'stopped') {
-      // pause() fell back to stop
-      await this.start(profile)
-      return
-    }
-    this.logger.info('OpenShell', `Resuming sandbox ${name}`, profile.id)
-    await this.cli.run(profile, ['sandbox', 'resume', name])
+    // start() resumes a suspended sandbox and starts one that pause() stopped
+    await this.start(profile)
   }
 
   async restart(profile: Profile): Promise<void> {
-    const name = this.config(profile).sandboxName
-    this.logger.info('OpenShell', `Restarting sandbox ${name}`, profile.id)
-    await this.cli.run(profile, ['sandbox', 'stop', name])
-    await this.waitFor(profile, (s) => s === 'stopped' || s === 'not-found' || s === 'failed')
+    this.logger.info('OpenShell', `Restarting sandbox ${this.config(profile).sandboxName}`, profile.id)
+    await this.stop(profile)
     await this.start(profile)
   }
 
@@ -188,6 +239,7 @@ export class OpenShellBackend implements ContainerBackend {
     const { status } = await this.getStatus(profile)
     if (status !== 'not-found') await this.remove(profile)
     await this.create(profile)
+    await this.waitUntilReady(profile)
   }
 
   async getLogs(profile: Profile, lines = 100): Promise<string> {
@@ -253,7 +305,10 @@ export class OpenShellBackend implements ContainerBackend {
     if (o.policyFile) args.push('--policy', expandWorkspacePath(profile, o.policyFile))
     for (const p of o.providers ?? []) args.push('--provider', p)
     for (const [k, v] of Object.entries(o.labels ?? {})) args.push('--label', `${k}=${v}`)
-    if (o.restartPolicy) args.push('--restart-policy', o.restartPolicy)
+    // Without a main command the main process is a login shell; `always` brings
+    // it back if someone attaches and exits it, instead of ending the sandbox.
+    const restartPolicy = o.restartPolicy ?? (o.mainCommand?.length ? undefined : 'always')
+    if (restartPolicy) args.push('--restart-policy', restartPolicy)
 
     if (o.mainCommand?.length) args.push('--', ...o.mainCommand)
     return args

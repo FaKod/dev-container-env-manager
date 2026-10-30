@@ -70,6 +70,7 @@ export interface OpenShellConfig {
   image?: string                  // --from; omit = gateway default image
   template?: string               // --template; excludes image/cpu/memory/gpu/env
   mainCommand?: string[]          // after `--` (D8)
+  shell?: string                  // terminal shell for `sandbox exec`; default bash, falling back to sh
   restartPolicy?: 'never' | 'on-failure' | 'always'
   policyFile?: string             // --policy (D5)
   policyPreset?: string           // D5 presets

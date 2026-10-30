@@ -215,16 +215,26 @@ export class TerminalManager extends EventEmitter {
     profile: Profile,
     context: TerminalContext
   ): Promise<{ command: string; args: string[] }> {
-    // OpenShell sandbox shell (D8): `openshell sandbox connect`, directly for
-    // local profiles or via `ssh -t host` for remote ones. The 'local' and 'ssh'
-    // contexts fall through to the code below, which never touches containers.
+    // OpenShell sandbox terminals (D8), run directly for local profiles or via
+    // `ssh -t host` for remote ones. `sandbox connect` attaches to the sandbox's
+    // main process (like docker attach) and exiting it ends that process, so
+    // only the first terminal of a profile with a real main command attaches.
+    // Every other terminal gets its own shell via `sandbox exec`, where `exit`
+    // leaves the sandbox alone. The 'local' and 'ssh' contexts fall through to
+    // the code below, which never touches containers.
     if (isOpenShell(profile) && context === 'container') {
-      return this.openShellCli.commandFor(
-        profile,
-        ['sandbox', 'connect', profile.openshell!.sandboxName],
-        sshInteractiveOptions(profile),
-        true
-      )
+      const o = profile.openshell!
+      const activeForProfile = Array.from(this.terminals.values()).filter(
+        (e) => e.session.profileId === profile.id && e.session.active
+      ).length
+      const shell = o.shell
+        ? o.shell.split(/\s+/).filter(Boolean)
+        : ['sh', '-c', 'command -v bash >/dev/null 2>&1 && exec bash || exec sh']
+      const args =
+        o.mainCommand?.length && activeForProfile === 0
+          ? ['sandbox', 'connect', o.sandboxName]
+          : ['sandbox', 'exec', o.sandboxName, '--tty', '--', ...shell]
+      return this.openShellCli.commandFor(profile, args, sshInteractiveOptions(profile), true)
     }
 
     // Local profiles run everything on this machine — no SSH wrapper
