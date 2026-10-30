@@ -1,4 +1,4 @@
-import type { Profile, ContainerState, OpenShellConfig } from '../../shared/types'
+import type { Profile, ContainerState, OpenShellConfig, OpenShellCheckResult } from '../../shared/types'
 import { expandWorkspacePath } from '../../shared/backend'
 import type { ContainerBackend } from './ContainerBackend'
 import type { EventLogManager } from './EventLogManager'
@@ -40,6 +40,36 @@ export class OpenShellBackend implements ContainerBackend {
   }
 
   // ─── Preflight (lazy: only runs when an OpenShell profile is used) ──────────
+
+  // ─── Editor helpers (profile may be unsaved; never cached) ──────────────────
+
+  /** CLI version and gateway status where this profile runs the CLI. */
+  async check(profile: Profile): Promise<OpenShellCheckResult> {
+    const version = (await this.cli.run(profile, ['--version'], 20_000)).trim()
+    const status = await this.cli.json<{ status?: string; gateway?: string; server?: string }>(
+      profile, ['status'], 20_000
+    )
+    return { version, gateway: status.gateway, server: status.server, status: status.status ?? 'unknown' }
+  }
+
+  async listGateways(profile: Profile): Promise<{ name: string; active: boolean }[]> {
+    const list = await this.cli.json<unknown>(profile, ['gateway', 'list'], 20_000)
+    return asArray(list)
+      .map((g) => ({ name: String(g.name ?? ''), active: g.active === true }))
+      .filter((g) => g.name)
+  }
+
+  async listProviders(profile: Profile): Promise<{ name: string; type: string }[]> {
+    const list = await this.cli.json<unknown>(profile, ['provider', 'list'], 20_000)
+    return asArray(list)
+      .map((p) => ({ name: String(p.name ?? ''), type: String(p.type ?? '') }))
+      .filter((p) => p.name)
+  }
+
+  async listTemplates(profile: Profile): Promise<string[]> {
+    const out = await this.cli.run(profile, ['sandbox', 'template', 'list', '--names'], 20_000)
+    return out.split('\n').map((l) => l.trim()).filter(Boolean)
+  }
 
   /**
    * Check that the CLI is present and recent enough and that the gateway is
@@ -406,6 +436,16 @@ export function driverConfigDisabledHint(profile: Profile, detail: string): stri
     '(a new file also needs [openshell] version = 2). Then restart the gateway: systemctl --user restart openshell-gateway. ' +
     `Or remove the workspace mount from the profile. (OpenShell: ${detail})`
   )
+}
+
+/** A CLI list as an array of objects (plain array, or wrapped in `items`). */
+function asArray(value: unknown): Record<string, unknown>[] {
+  const list = Array.isArray(value)
+    ? value
+    : Array.isArray((value as { items?: unknown })?.items)
+      ? (value as { items: unknown[] }).items
+      : []
+  return list.filter((v): v is Record<string, unknown> => typeof v === 'object' && v !== null)
 }
 
 function errText(err: unknown): string {

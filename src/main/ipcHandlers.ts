@@ -590,6 +590,30 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
     ) => containerManager.detectImagePorts(host, user, port, identityFile, image, local)
   )
 
+  // ─── OpenShell (profile editor helpers) ─────────────────────────────────────
+
+  // The editor passes the profile being edited, which may not be saved yet.
+  const editorProfile = (draft: Omit<Profile, 'id' | 'createdAt' | 'updatedAt'>): Profile => ({
+    ...draft,
+    id: 'profile-editor',
+    createdAt: '',
+    updatedAt: '',
+    openshell: { ...(draft.openshell ?? {}), sandboxName: draft.openshell?.sandboxName || 'profile-editor' }
+  })
+
+  ipcMain.handle('openshell:check', (_e, draft: Omit<Profile, 'id' | 'createdAt' | 'updatedAt'>) =>
+    openShellBackend.check(editorProfile(draft))
+  )
+  ipcMain.handle('openshell:gateways', (_e, draft: Omit<Profile, 'id' | 'createdAt' | 'updatedAt'>) =>
+    openShellBackend.listGateways(editorProfile(draft))
+  )
+  ipcMain.handle('openshell:providers', (_e, draft: Omit<Profile, 'id' | 'createdAt' | 'updatedAt'>) =>
+    openShellBackend.listProviders(editorProfile(draft))
+  )
+  ipcMain.handle('openshell:templates', (_e, draft: Omit<Profile, 'id' | 'createdAt' | 'updatedAt'>) =>
+    openShellBackend.listTemplates(editorProfile(draft))
+  )
+
   // ─── Logs ──────────────────────────────────────────────────────────────────
 
   ipcMain.handle('log:getAll', (_e, profileId?: string) =>

@@ -636,7 +636,7 @@ Verify the assumptions this plan depends on, on a local Docker-driver gateway:
 - Image `EXPOSE` detection (`detectImagePorts`) can stay for local Docker/Podman gateways to pre-fill forwards.
 - **Acceptance:** forwards come up after `READY`, stop on disconnect/stop, and auto-reconnect after a gateway restart.
 
-### Phase 5 — Editor UI, policy and providers
+### Phase 5 — Editor UI, policy and providers  *(editor implemented 2026-10-30, see §8.1; presets, deny filter and import warning still open)*
 
 - `ProfileEditor.tsx`: backend switch "Docker container / OpenShell sandbox", **defaulting to Docker**; the existing Docker/SSH sections are unchanged and shown only for Docker. The OpenShell section has: gateway (dropdown from `gateway list -o json`), image or template (template list from `sandbox template list -o json`), main command, restart policy, CPU/memory/GPU, env (with secret-name warning, D6), providers (multi-select from `provider list -o json`), policy preset/file (D5), uploads, forwards, advanced driver JSON.
 - Ship policy presets under `resources/policies/` (or wherever D5 decides).
@@ -791,6 +791,36 @@ prove Docker profiles never depend on it (§0.1 rule 3).
 - Profile JSON: `"forwards": [{ "localPort": 8080, "targetPort": 3000, "remotePort": 18080 }]`
   inside `openshell` (`remotePort` and `bindAddress` optional).
 
+**Phase 5: profile editor** (provisional D5/D6, see §8.2)
+
+- General tab: **Environment** choice *Docker container* (default) / *OpenShell
+  sandbox*. Switching to OpenShell creates the `openshell` block and sets new
+  terminals to open in the sandbox; switching back keeps the block. For
+  sandboxes, the Docker port sections are replaced by a pointer to the Sandbox tab.
+- New **Sandbox** tab (`src/renderer/src/components/OpenShellTab.tsx`) instead
+  of Container, with these sections:
+  - sandbox name (DNS label check, placeholder derived from the profile name);
+  - image or template (templates loadable from the gateway);
+  - main command (quote-aware), restart policy (shows the effective default), terminal shell;
+  - CPU / memory / GPU;
+  - folder mount with the isolation / uid 1000 / opt-in warning;
+  - port forwards (with "port on host" for remote profiles);
+  - environment variables with a warning for secret-looking names;
+  - providers (typed or picked after "Load from gateway");
+  - policy file;
+  - gateway, workspace, CLI path, driver, driver config JSON (validated);
+  - **Test connection** (CLI version + gateway status, locally or over SSH).
+- Save checks (`validateOpenShell`): sandbox name, template conflicts
+  (image/resources/env/mount/driver config), mount target below `/sandbox/`,
+  port ranges and duplicate local ports, driver config JSON. An untouched
+  default Docker `container` block is dropped from sandbox profiles.
+- Policy tab wording for sandboxes ("Existing Sandbox Behavior", Pause note).
+- IPC `openshell:check|gateways|providers|templates` take the profile being
+  edited (may be unsaved). They use `status -o json`, `gateway list -o json`,
+  `provider list -o json` and `sandbox template list --names`.
+- Not yet: policy presets (D5), denied-connection filter in the LogViewer (D5),
+  warning on import about machine-specific paths.
+
 **Renderer (minimal, ahead of Phase 5)**
 
 - Connect / auto-connect open a `container` terminal for OpenShell profiles.
@@ -847,6 +877,8 @@ confirm or change.
 | D11 | A: `backend` field + `openshell` block |
 | D12 | A: polling. The renderer's existing 30 s status poll is reused; no faster polling during transitions yet. |
 | D13 | Minimum 0.1.0. Older is a hard error; newer is allowed silently. |
+| D5 | Policy **file path** only for now (presets later); denied-connection filter not done yet |
+| D6 | A: providers referenced by name (typed or loaded from the gateway); secret-looking env names **warn**, not block |
 
 ### 8.3 Findings from the OpenShell source (replace Phase 0 guesses)
 

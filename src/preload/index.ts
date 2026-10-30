@@ -7,7 +7,8 @@ import type {
   TerminalContext,
   TerminalSession,
   PersistedSession,
-  LogEntry
+  LogEntry,
+  OpenShellCheckResult
 } from '../shared/types'
 
 // ─── Type-safe IPC bridge ─────────────────────────────────────────────────────
@@ -165,6 +166,21 @@ export const api = {
     local?: boolean
   ): Promise<number[]> =>
     ipcRenderer.invoke('container:detectPorts', host, user, port, identityFile, image, local ?? false),
+
+  // ── OpenShell (profile editor; takes the profile being edited, may be unsaved) ─
+  openShellCheck: (draft: Omit<Profile, 'id' | 'createdAt' | 'updatedAt'>): Promise<OpenShellCheckResult> =>
+    ipcRenderer.invoke('openshell:check', draft),
+
+  openShellGateways: (
+    draft: Omit<Profile, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<{ name: string; active: boolean }[]> => ipcRenderer.invoke('openshell:gateways', draft),
+
+  openShellProviders: (
+    draft: Omit<Profile, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<{ name: string; type: string }[]> => ipcRenderer.invoke('openshell:providers', draft),
+
+  openShellTemplates: (draft: Omit<Profile, 'id' | 'createdAt' | 'updatedAt'>): Promise<string[]> =>
+    ipcRenderer.invoke('openshell:templates', draft),
 
   // ── Logs ──────────────────────────────────────────────────────────────────
   getLogs: (profileId?: string): Promise<LogEntry[]> =>

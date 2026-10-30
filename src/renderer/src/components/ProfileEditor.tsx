@@ -3,9 +3,11 @@ import { useAppStore } from '../store/useAppStore'
 import { toast } from './Toast'
 import { showConfirm } from './ConfirmModal'
 import { PROFILE_ICON_GROUPS } from './profileIcons'
+import { OpenShellTab, validateOpenShell } from './OpenShellTab'
 import type { Profile, PortForward } from '../../../shared/types'
 
 type DraftProfile = Omit<Profile, 'id' | 'createdAt' | 'updatedAt'>
+type EditorTab = 'general' | 'ssh' | 'container' | 'sandbox' | 'policy'
 
 const PROFILE_COLORS = [
   '--blue', '--mauve', '--teal', '--peach', '--green', '--sapphire',
@@ -89,7 +91,7 @@ export function ProfileEditor(): React.ReactElement {
   const [draft, setDraft] = useState<DraftProfile>(
     existing ? profileToDraft(existing) : emptyDraft()
   )
-  const [activeTab, setActiveTab] = useState<'general' | 'ssh' | 'container' | 'policy'>('general')
+  const [activeTab, setActiveTab] = useState<EditorTab>('general')
   const [saving, setSaving] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
   const firstInputRef = useRef<HTMLInputElement>(null)
@@ -125,13 +127,24 @@ export function ProfileEditor(): React.ReactElement {
   async function handleSave(): Promise<void> {
     if (!draft.name.trim()) { toast('Profile name is required'); return }
     if (!draft.local && !draft.ssh.host.trim()) { toast('SSH host is required'); return }
+    const sandbox = draft.backend === 'openshell'
+    if (sandbox) {
+      const problem = validateOpenShell(draft)
+      if (problem) { toast(problem); setActiveTab('sandbox'); return }
+    }
 
     setSaving(true)
     try {
       // Ensure container name always falls back to a sanitized profile name
-      const finalDraft = draft.container && !draft.container.name.trim()
+      let finalDraft = draft.container && !draft.container.name.trim()
         ? { ...draft, container: { ...draft.container, name: toContainerName(draft.name.trim()) } }
         : draft
+      // A sandbox profile keeps its Docker settings only if some were entered
+      // (so switching back doesn't lose them); an untouched default is dropped.
+      // `container: undefined` must be explicit: updates are merged.
+      if (sandbox && !finalDraft.container?.image?.trim()) {
+        finalDraft = { ...finalDraft, container: undefined }
+      }
 
       if (existing) {
         const updated = await window.api.updateProfile(existing.id, finalDraft)
@@ -161,9 +174,8 @@ export function ProfileEditor(): React.ReactElement {
     if (e.target === e.currentTarget) handleClose()
   }
 
-  const tabs = (draft.local
-    ? ['general', 'container', 'policy']
-    : ['general', 'ssh', 'container', 'policy']) as ('general' | 'ssh' | 'container' | 'policy')[]
+  const envTab: EditorTab = draft.backend === 'openshell' ? 'sandbox' : 'container'
+  const tabs: EditorTab[] = draft.local ? ['general', envTab, 'policy'] : ['general', 'ssh', envTab, 'policy']
 
   return (
     <div className="modal-overlay" onClick={handleOverlayClick}>
@@ -203,8 +215,11 @@ export function ProfileEditor(): React.ReactElement {
           {activeTab === 'ssh' && (
             <SSHTab draft={draft} onChange={set} />
           )}
-          {activeTab === 'container' && (
+          {activeTab === 'container' && draft.backend !== 'openshell' && (
             <ContainerTab draft={draft} onChange={set} />
+          )}
+          {activeTab === 'sandbox' && draft.backend === 'openshell' && (
+            <OpenShellTab draft={draft} onChange={set} />
           )}
           {activeTab === 'policy' && (
             <PolicyTab draft={draft} onChange={set} />
@@ -234,6 +249,19 @@ interface TabProps {
 
 function GeneralTab({ draft, onChange, firstInputRef }: TabProps): React.ReactElement {
   const [detecting, setDetecting] = useState(false)
+  const sandbox = draft.backend === 'openshell'
+
+  function setBackend(backend: 'docker' | 'openshell'): void {
+    if (backend === 'openshell') {
+      onChange('backend', 'openshell')
+      if (!draft.openshell) onChange('openshell', { sandboxName: '' })
+      // New terminals of a sandbox profile open in the sandbox
+      onChange('terminal', { ...draft.terminal, defaultContext: 'container' })
+    } else {
+      // The openshell block is kept, so switching back doesn't lose it
+      onChange('backend', undefined)
+    }
+  }
 
   function addForward(): void {
     onChange('ssh', {
@@ -412,11 +440,37 @@ function GeneralTab({ draft, onChange, firstInputRef }: TabProps): React.ReactEl
           Local machine (no SSH)
         </label>
         <div style={{ fontSize: 11, color: 'var(--overlay1)', marginTop: 2 }}>
-          Run Docker commands directly on this machine instead of over SSH.
+          {sandbox
+            ? 'Run the OpenShell CLI directly on this machine instead of over SSH.'
+            : 'Run Docker commands directly on this machine instead of over SSH.'}
         </div>
       </div>
 
-      {draft.local ? (
+      <div className="form-group">
+        <label>Environment</label>
+        <div style={{ display: 'flex', gap: 16, paddingTop: 4 }}>
+          <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 'normal' }}>
+            <input type="radio" name="backend" checked={!sandbox} onChange={() => setBackend('docker')} />
+            Docker container
+          </label>
+          <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 'normal' }}>
+            <input type="radio" name="backend" checked={sandbox} onChange={() => setBackend('openshell')} />
+            OpenShell sandbox
+          </label>
+        </div>
+        {sandbox && (
+          <div style={{ fontSize: 11, color: 'var(--overlay1)', marginTop: 2 }}>
+            Runs in an NVIDIA OpenShell sandbox with filesystem, network and credential policy. Needs the OpenShell
+            CLI and a gateway {draft.local ? 'on this machine' : 'on the SSH host'}. Settings are on the Sandbox tab.
+          </div>
+        )}
+      </div>
+
+      {sandbox ? (
+        <div style={{ fontSize: 11, color: 'var(--overlay1)', marginTop: 8 }}>
+          Port forwards into the sandbox are set on the Sandbox tab.
+        </div>
+      ) : draft.local ? (
         <>
           <div className="form-section-title" style={{ marginTop: 8 }}>
             Port Mappings
@@ -538,7 +592,7 @@ function GeneralTab({ draft, onChange, firstInputRef }: TabProps): React.ReactEl
           >
             <option value="local">Local shell</option>
             <option value="ssh">SSH shell</option>
-            <option value="container">Container shell</option>
+            <option value="container">{sandbox ? 'Sandbox shell' : 'Container shell'}</option>
           </select>
         </div>
         <div className="form-group">
@@ -781,6 +835,7 @@ function ContainerTab({ draft, onChange }: TabProps): React.ReactElement {
 
 function PolicyTab({ draft, onChange }: TabProps): React.ReactElement {
   const p = draft.connectionPolicy
+  const kind = draft.backend === 'openshell' ? 'sandbox' : 'container'
 
   function updatePolicy<K extends keyof typeof p>(
     key: K,
@@ -843,7 +898,7 @@ function PolicyTab({ draft, onChange }: TabProps): React.ReactElement {
         </div>
       </div>
       <div className="form-group">
-        <label>Existing Container Behavior</label>
+        <label>Existing {kind === 'sandbox' ? 'Sandbox' : 'Container'} Behavior</label>
         <select
           className="form-control"
           value={p.existingContainerBehavior ?? 'attach-or-recreate'}
@@ -874,8 +929,10 @@ function PolicyTab({ draft, onChange }: TabProps): React.ReactElement {
           }
         >
           <option value="leave">Leave running</option>
-          <option value="stop">Stop container</option>
-          <option value="pause">Pause container</option>
+          <option value="stop">Stop {kind}</option>
+          <option value="pause">
+            {kind === 'sandbox' ? 'Pause sandbox (stops it if the gateway cannot suspend)' : 'Pause container'}
+          </option>
         </select>
       </div>
     </div>

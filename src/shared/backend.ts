@@ -49,3 +49,52 @@ export function sandboxSlug(name: string): string {
     .replace(/-+$/, '')
   return slug || 'sandbox'
 }
+
+/** Sandbox names the gateway accepts: a DNS-1123 label of at most 19 characters. */
+export function isValidSandboxName(name: string): boolean {
+  return name.length <= SANDBOX_NAME_MAX_LEN && /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(name)
+}
+
+/**
+ * Env names that probably hold a secret. Plain env vars are readable by the
+ * sandboxed agent; secrets belong in OpenShell providers (D6).
+ */
+export function looksLikeSecret(envName: string): boolean {
+  return /(TOKEN|SECRET|PASSW(OR)?D|API_?KEY|PRIVATE_?KEY|CREDENTIAL|AUTH)/i.test(envName)
+}
+
+/** Split a command line into arguments, honouring '…' and "…" quotes and \ escapes. */
+export function splitCommand(line: string): string[] {
+  const args: string[] = []
+  let cur = ''
+  let inArg = false
+  let quote: '"' | "'" | null = null
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (quote) {
+      if (ch === quote) quote = null
+      else if (ch === '\\' && quote === '"' && i + 1 < line.length) cur += line[++i]
+      else cur += ch
+    } else if (ch === '"' || ch === "'") {
+      quote = ch
+      inArg = true
+    } else if (ch === '\\' && i + 1 < line.length) {
+      cur += line[++i]
+      inArg = true
+    } else if (/\s/.test(ch)) {
+      if (inArg) args.push(cur)
+      cur = ''
+      inArg = false
+    } else {
+      cur += ch
+      inArg = true
+    }
+  }
+  if (inArg) args.push(cur)
+  return args
+}
+
+/** Inverse of splitCommand, for showing a stored argument list in a text field. */
+export function joinCommand(args: string[]): string {
+  return args.map((a) => (a === '' || /[\s'"\\]/.test(a) ? `'${a.replace(/'/g, `'\\''`)}'` : a)).join(' ')
+}

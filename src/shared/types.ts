@@ -87,6 +87,14 @@ export interface OpenShellConfig {
   driverConfigJson?: string       // advanced; requires gateway opt-in
 }
 
+/** Result of the profile editor's "Test connection" for an OpenShell profile. */
+export interface OpenShellCheckResult {
+  version: string        // `openshell --version`
+  gateway?: string       // active or selected gateway name
+  server?: string        // gateway endpoint
+  status: string         // `openshell status` status, e.g. connected
+}
+
 export interface TerminalConfig {
   presentation: 'tab' | 'window' | 'pane'
   defaultContext: TerminalContext
