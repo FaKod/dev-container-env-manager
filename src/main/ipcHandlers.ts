@@ -216,49 +216,52 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
       const backend = backendFor(profile)
       const current = await backend.getStatus(profile)
       const name = environmentName(profile)
+      // Wording only: Docker messages are unchanged, sandboxes are called sandboxes
+      const kind = isOpenShell(profile) ? 'sandbox' : 'container'
+      const Kind = isOpenShell(profile) ? 'Sandbox' : 'Container'
       const behavior = profile.connectionPolicy.existingContainerBehavior ?? 'attach-or-recreate'
 
-      eventLogManager.info('Launch', `Container "${name}" status: ${current.status}, behavior: ${behavior}`, profileId)
+      eventLogManager.info('Launch', `${Kind} "${name}" status: ${current.status}, behavior: ${behavior}`, profileId)
 
       if (behavior === 'recreate') {
         if (current.status !== 'not-found') {
-          eventLogManager.info('Launch', `Removing container "${name}" for recreate`, profileId)
+          eventLogManager.info('Launch', `Removing ${kind} "${name}" for recreate`, profileId)
           await backend.remove(profile)
         }
         await backend.start(profile)
 
       } else if (behavior === 'attach') {
         if (current.status === 'paused') {
-          eventLogManager.info('Launch', `Unpausing container "${name}"`, profileId)
+          eventLogManager.info('Launch', `Unpausing ${kind} "${name}"`, profileId)
           await backend.unpause(profile)
         } else if (current.status !== 'running') {
-          throw new Error(`Container "${name}" is not running (status: ${current.status})`)
+          throw new Error(`${Kind} "${name}" is not running (status: ${current.status})`)
         } else {
-          eventLogManager.info('Launch', `Attaching to running container "${name}"`, profileId)
+          eventLogManager.info('Launch', `Attaching to running ${kind} "${name}"`, profileId)
         }
 
       } else if (behavior === 'start') {
         if (current.status === 'running') {
-          eventLogManager.info('Launch', `Attaching to running container "${name}"`, profileId)
+          eventLogManager.info('Launch', `Attaching to running ${kind} "${name}"`, profileId)
         } else if (current.status === 'paused') {
-          eventLogManager.info('Launch', `Unpausing container "${name}"`, profileId)
+          eventLogManager.info('Launch', `Unpausing ${kind} "${name}"`, profileId)
           await backend.unpause(profile)
         } else if (current.status === 'stopped') {
-          eventLogManager.info('Launch', `Starting stopped container "${name}"`, profileId)
+          eventLogManager.info('Launch', `Starting stopped ${kind} "${name}"`, profileId)
           await backend.start(profile)
         } else {
-          throw new Error(`Container "${name}" does not exist (status: ${current.status})`)
+          throw new Error(`${Kind} "${name}" does not exist (status: ${current.status})`)
         }
 
       } else {
         // 'attach-or-recreate' (default) or 'ask' (falls back to attach-or-recreate)
         if (current.status === 'running') {
-          eventLogManager.info('Launch', `Attaching to running container "${name}"`, profileId)
+          eventLogManager.info('Launch', `Attaching to running ${kind} "${name}"`, profileId)
         } else if (current.status === 'paused') {
-          eventLogManager.info('Launch', `Unpausing container "${name}"`, profileId)
+          eventLogManager.info('Launch', `Unpausing ${kind} "${name}"`, profileId)
           await backend.unpause(profile)
         } else {
-          eventLogManager.info('Launch', `Starting/creating container "${name}"`, profileId)
+          eventLogManager.info('Launch', `Starting/creating ${kind} "${name}"`, profileId)
           await backend.start(profile)
         }
       }

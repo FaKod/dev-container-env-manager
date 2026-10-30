@@ -130,7 +130,7 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
         await openContainerTerminal()
       }
     } catch (err) {
-      toast(`Container ${action} failed: ${err}`)
+      toast(`${profile && isOpenShell(profile) ? 'Sandbox' : 'Container'} ${action} failed: ${err}`)
     } finally {
       setContainerBusy(false)
     }
@@ -290,7 +290,7 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
               className="btn btn-danger btn-sm"
               onClick={() => containerAction('remove')}
               disabled={containerBusy || containerState?.status === 'not-found'}
-              title="Remove container from remote host"
+              title={isOpenShell(profile) ? 'Delete the sandbox' : 'Remove container from remote host'}
             >
               Delete
             </button>
