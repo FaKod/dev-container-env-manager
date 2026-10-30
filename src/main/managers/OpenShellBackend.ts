@@ -17,6 +17,7 @@ import { sshTarget } from './sshCommon'
 /** Creating a sandbox may pull an image first. */
 const CREATE_TIMEOUT_MS = 10 * 60_000
 const TRANSITION_TIMEOUT_MS = 2 * 60_000
+const STOP_SETTLE_TIMEOUT_MS = 20_000
 
 /**
  * OpenShell sandboxes as a container backend (Docs/openshell-sandbox-plan.md, Phase 2).
@@ -146,7 +147,7 @@ export class OpenShellBackend implements ContainerBackend {
         break
       case 'error':
         this.logger.info('OpenShell', `Sandbox ${name} is in Error; stopping before start`, profile.id)
-        await this.cli.run(profile, ['sandbox', 'stop', name])
+        await this.stopSandbox(profile)
         await this.startStopped(profile)
         break
       case 'completed':
@@ -155,7 +156,7 @@ export class OpenShellBackend implements ContainerBackend {
         } catch (err) {
           if ((await this.phase(profile)) !== 'error') throw err
           this.logger.warn('OpenShell', `Start after Completed failed, retrying via stop: ${errText(err)}`, profile.id)
-          await this.cli.run(profile, ['sandbox', 'stop', name])
+          await this.stopSandbox(profile)
           await this.startStopped(profile)
         }
         break
@@ -194,7 +195,28 @@ export class OpenShellBackend implements ContainerBackend {
       throw new Error(`Sandbox ${name} is still starting and can't be stopped yet. If it stays stuck, use Recreate.`)
     }
     this.logger.info('OpenShell', `Stopping sandbox ${name}`, profile.id)
-    await this.cli.run(profile, ['sandbox', 'stop', name])
+    await this.stopSandbox(profile)
+  }
+
+  /**
+   * `sandbox stop`, tolerating a CLI quirk (OpenShell 0.1.6): stopping a sandbox
+   * whose main process failed makes the CLI exit with "MainProcessFailed: …
+   * while waiting for Stopped", because its first status read still shows
+   * Error, although the gateway accepted the stop. So on failure, give the
+   * sandbox a moment to reach Stopped and only rethrow if it doesn't.
+   */
+  private async stopSandbox(profile: Profile): Promise<void> {
+    const name = this.config(profile).sandboxName
+    try {
+      await this.cli.run(profile, ['sandbox', 'stop', name])
+    } catch (err) {
+      try {
+        await this.waitFor(profile, (s) => s === 'stopped' || s === 'not-found', STOP_SETTLE_TIMEOUT_MS)
+      } catch {
+        throw err
+      }
+      this.logger.debug('OpenShell', `stop reported "${errText(err)}" but sandbox ${name} stopped`, profile.id)
+    }
   }
 
   /** D9: suspend if the driver supports it (the Docker driver doesn't), otherwise stop. */
@@ -257,12 +279,13 @@ export class OpenShellBackend implements ContainerBackend {
     await this.cli.run(profile, args, CREATE_TIMEOUT_MS)
   }
 
-  /** Poll status until `done` holds, or give up after TRANSITION_TIMEOUT_MS. */
+  /** Poll status until `done` holds, or give up after `timeoutMs`. */
   private async waitFor(
     profile: Profile,
-    done: (status: ContainerState['status']) => boolean
+    done: (status: ContainerState['status']) => boolean,
+    timeoutMs = TRANSITION_TIMEOUT_MS
   ): Promise<void> {
-    const deadline = Date.now() + TRANSITION_TIMEOUT_MS
+    const deadline = Date.now() + timeoutMs
     for (;;) {
       const { status } = await this.getStatus(profile)
       if (done(status)) return

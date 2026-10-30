@@ -858,7 +858,9 @@ confirm or change.
 | **`connect`** | **Attaches to the main process** (the login shell when there is no main command). Ctrl-D / Ctrl-P Ctrl-Q detach. `exit` ends the main process: exit 0 → `Completed`, non-zero → `Error` (`restart_policy: never`). | Terminals use `exec` (D8 decision) |
 | `exec N --tty -- bash` | Independent shell; `exit` leaves the sandbox `Ready` | Default terminal command |
 | `--restart-policy always` + `exit` in `connect` | Shell restarts, phase stays `Ready`, `restart_count` 1 | Default when there is no main command |
+| Open `exec` terminals during a main-process restart | Closed: *"exec relay closed before the command reported an exit status"*. The sandbox stays `Ready`; a new terminal works immediately. | Acceptable. The app itself never attaches to the main shell, so this only happens through an external `connect` + `exit`. |
 | `start` on `Error` | Refused (*"stop the sandbox before retrying start"*). Once it also left the sandbox **stuck in `Starting`** (*"Docker sandbox is already running generation …"*). | `start()` stops first |
+| `stop` on `Error` after the main process failed (`restart_policy: never`, `exit 1`) | The CLI exits with *"MainProcessFailed: Canonical main process exited with status 1 while waiting for Stopped"*: its first status read still shows `Error`. The gateway accepted the stop, and the sandbox reaches `Stopped` right after. | `stopSandbox()`: on a failed stop, wait up to 20 s for `Stopped` and only report the error if it doesn't come. Verified in the app: Start on a failed sandbox works. |
 | `stop` on `Starting` | Refused (*"must be Ready, Suspended, Error, or in an automatic restart to stop"*) | Clear error, suggests Recreate |
 | `start` on `Completed` | Allowed, but **failed** (*"supervisor authentication bundle does not match runtime session"*) and went to `Error`. Then `stop` → `start` → `Ready` worked. Likely an OpenShell bug. | `start()` retries via stop |
 | `stop` on `Completed` | **Does not return** | `stop()` skips Completed / Stopped |
@@ -874,7 +876,8 @@ Still open from Phase 0:
 
 Worth reporting upstream: `start` on `Error` wedging the sandbox in `Starting`;
 `start` on `Completed` failing with the auth-bundle error; `stop` on
-`Completed` hanging.
+`Completed` hanging; `stop` on a main-process `Error` failing although the
+sandbox stops.
 
 ### 8.5 Next steps
 
