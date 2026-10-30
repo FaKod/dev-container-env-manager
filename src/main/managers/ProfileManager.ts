@@ -71,6 +71,11 @@ export class ProfileManager {
     if (profile.openshell && !profile.openshell.sandboxName) {
       profile.openshell = { ...profile.openshell, sandboxName: this.uniqueSandboxName(name) }
     }
+    // New terminals of an OpenShell profile should open in the sandbox unless the
+    // profile says otherwise (imported JSON often has no `terminal` block).
+    if (profile.backend === 'openshell' && !data.terminal?.defaultContext) {
+      profile.terminal = { ...profile.terminal, defaultContext: 'container' }
+    }
 
     const profiles = this.getAll()
     profiles.push(profile)

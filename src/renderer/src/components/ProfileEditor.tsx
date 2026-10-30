@@ -72,7 +72,10 @@ function profileToDraft(p: Profile): DraftProfile {
         }
       : emptyDraft().container,
     connectionPolicy: { ...p.connectionPolicy },
-    workspace: p.workspace ? { ...p.workspace } : {}
+    workspace: p.workspace ? { ...p.workspace } : {},
+    // Not editable here yet (plan Phase 5), but carried along so saving keeps them
+    backend: p.backend,
+    openshell: p.openshell ? JSON.parse(JSON.stringify(p.openshell)) : undefined
   }
 }
 
