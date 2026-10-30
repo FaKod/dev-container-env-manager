@@ -359,7 +359,20 @@ The spike must confirm that killing the local `ssh` also ends the remote
 
 **Recommendation:** A, keep C as fallback if A misbehaves in the spike. Service
 URLs later.
-**Decision:** ☐ A ☐ B ☐ C; service URLs ☐ now ☐ later ☐ never — _______
+
+**Decision (2026-10-30, implemented): A.** Service URLs: later.
+- Local profiles: one `openshell forward service N --target-port P --local
+  <bind>:<localPort>` child process per forward.
+- Remote profiles: instead of reusing the profile's `ssh -N` tunnel, **one
+  `ssh -tt -L <bind>:<localPort>:127.0.0.1:<remotePort> host 'openshell
+  forward service … --local 127.0.0.1:<remotePort>'` per forward** carries both
+  hops. `-tt` makes `sshd` send SIGHUP to the remote command when the
+  connection drops. `remotePort` (default `localPort`) is the loopback port on
+  the SSH host.
+- `forward service` exits when the sandbox is no longer Ready (it checks every
+  2 s). Exited forwards are retried with backoff (2 s → 30 s). Start, Unpause,
+  Restart and Recreate restart them at once; Stop, Pause, Delete and
+  Disconnect end them.
 
 ### D8 — Terminal and main process
 
@@ -617,7 +630,7 @@ Verify the assumptions this plan depends on, on a local Docker-driver gateway:
 - `stageFile`/`stageImage` → local: `openshell sandbox upload N <tmpfile> <targetPath> --no-git-ignore`; remote: same command after `cat > /tmp/…` over SSH, mirroring today's remote `docker cp` branch.
 - **Acceptance:** multiple terminals per sandbox; image paste and file drop land in the sandbox; workspace is present under `/sandbox/…`.
 
-### Phase 4 — Port forwards
+### Phase 4 — Port forwards  *(implemented 2026-10-30, see D7 and §8.1)*
 
 - Per D7: `ConnectionManager` spawns one forward process per `openshell.forwards[]` entry (remote: via `ssh host`, behind the existing `-L` tunnel), reports per-forward `active` state through the existing `PortForwardState`, and reuses the reconnect/backoff logic.
 - Image `EXPOSE` detection (`detectImagePorts`) can stay for local Docker/Podman gateways to pre-fill forwards.
@@ -762,6 +775,22 @@ prove Docker profiles never depend on it (§0.1 rule 3).
 - `stop()` skips Stopped, Completed and main-process Error (the gateway counts them as stopped), and refuses Starting with a clear message.
 - Sandboxes without a main command are created with `--restart-policy always`.
 
+**Phase 4: port forwards** (D7)
+
+- `OpenShellForwards` (`src/main/managers/OpenShellForwards.ts`), owned by
+  `ConnectionManager`: one process per `openshell.forwards[]` entry (see D7
+  for the command lines), readiness from the "✓ Forwarding" line, retry with
+  backoff, a warning in the event log once per new failure reason.
+- `ConnectionManager` merges the sandbox forwards into the profile's
+  `portForwards` (unchanged object for profiles without any). `disconnect()`
+  stops them. `ipcHandlers` starts them after launch and after
+  Start/Unpause/Restart/Recreate, and stops them before Stop/Pause/Delete.
+- Status panel: the "Port Forwards" section also shows for local OpenShell
+  profiles, e.g. `localhost:8080 → os-spark:3000`. "Open in browser" on the
+  profile tile uses the first sandbox forward.
+- Profile JSON: `"forwards": [{ "localPort": 8080, "targetPort": 3000, "remotePort": 18080 }]`
+  inside `openshell` (`remotePort` and `bindAddress` optional).
+
 **Renderer (minimal, ahead of Phase 5)**
 
 - Connect / auto-connect open a `container` terminal for OpenShell profiles.
@@ -875,7 +904,7 @@ Still open from Phase 0:
 - two concurrent `connect`s, and closing the window while connected (only matters for profiles with a main command; all other terminals use `exec`);
 - upload (and the two-hop remote upload);
 - logs;
-- remote `forward service`: no orphaned process on the host after the local `ssh` dies (Phase 4).
+- remote `forward service` over `ssh -tt`: no orphaned process on the host after the local `ssh` dies or the network drops (Phase 4, implemented; needs the real test).
 
 Worth reporting upstream: `start` on `Error` wedging the sandbox in `Starting`;
 `start` on `Completed` failing with the auth-bundle error; `stop` on

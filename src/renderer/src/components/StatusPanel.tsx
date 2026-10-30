@@ -191,8 +191,8 @@ export function StatusPanel({ profileId }: Props): React.ReactElement {
         </div>
       )}
 
-      {/* Port Forwards — only for non-local profiles */}
-      {!profile.local && (connState?.portForwards?.length ?? 0) > 0 && (
+      {/* Port Forwards — for non-local profiles, and for sandboxes (local ones too) */}
+      {(!profile.local || isOpenShell(profile)) && (connState?.portForwards?.length ?? 0) > 0 && (
         <div className="status-section status-section-ports">
           <div className="status-section-title"><Network size={11} /> Port Forwards</div>
           {connState!.portForwards.map((pf, i) => (

@@ -101,7 +101,10 @@ export function ProfileCard({ profile, compact = false }: Props): React.ReactEle
   }
 
   async function handleOpenBrowser(): Promise<void> {
-    const port = profile.ssh.forwards[0]?.localPort ?? profile.container?.ports[0]?.hostPort
+    const port =
+      profile.ssh.forwards[0]?.localPort ??
+      profile.container?.ports[0]?.hostPort ??
+      profile.openshell?.forwards?.[0]?.localPort
     if (port) {
       try {
         await window.api.openUrl(`http://localhost:${port}`)

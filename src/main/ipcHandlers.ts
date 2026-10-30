@@ -271,6 +271,9 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
       const finalStatus = await backend.getStatus(profile)
       mainWindow.webContents.send('container:stateChanged', profileId, finalStatus)
     }
+
+    // 3. OpenShell sandbox port forwards need a Ready sandbox (no-op for Docker)
+    connectionManager.startSandboxForwards(profile)
   }
 
   ipcMain.handle('connection:launch', async (_e, profileId: string) => {
@@ -512,12 +515,14 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
     const profile = profileManager.getById(profileId)
     if (!profile) throw new Error(`Profile ${profileId} not found`)
     await backendFor(profile).start(profile)
+    connectionManager.startSandboxForwards(profile)
     await notifyContainerState(profile, 'running')
   })
 
   ipcMain.handle('container:stop', async (_e, profileId: string) => {
     const profile = profileManager.getById(profileId)
     if (!profile) throw new Error(`Profile ${profileId} not found`)
+    connectionManager.stopSandboxForwards(profileId) // they'd only fail and retry while it's down
     await backendFor(profile).stop(profile)
     await notifyContainerState(profile, 'stopped')
   })
@@ -526,6 +531,7 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
     const profile = profileManager.getById(profileId)
     if (!profile) throw new Error(`Profile ${profileId} not found`)
     await backendFor(profile).restart(profile)
+    connectionManager.startSandboxForwards(profile)
     await notifyContainerState(profile, 'running')
   })
 
@@ -534,6 +540,7 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
     if (!profile) throw new Error(`Profile ${profileId} not found`)
     // Kill terminals before removing so they don't reconnect to a new container
     terminalManager.destroyForProfile(profileId)
+    connectionManager.stopSandboxForwards(profileId)
     await backendFor(profile).remove(profile)
     await notifyContainerState(profile, 'not-found')
   })
@@ -544,12 +551,14 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
     // Kill terminals before recreating so they don't reconnect to the new container
     terminalManager.destroyForProfile(profileId)
     await backendFor(profile).recreate(profile)
+    connectionManager.startSandboxForwards(profile)
     await notifyContainerState(profile, 'running')
   })
 
   ipcMain.handle('container:pause', async (_e, profileId: string) => {
     const profile = profileManager.getById(profileId)
     if (!profile) throw new Error(`Profile ${profileId} not found`)
+    connectionManager.stopSandboxForwards(profileId) // they'd only fail and retry while it's down
     await backendFor(profile).pause(profile)
     await notifyContainerState(profile, 'paused')
   })
@@ -558,6 +567,7 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
     const profile = profileManager.getById(profileId)
     if (!profile) throw new Error(`Profile ${profileId} not found`)
     await backendFor(profile).unpause(profile)
+    connectionManager.startSandboxForwards(profile)
     await notifyContainerState(profile, 'running')
   })
 

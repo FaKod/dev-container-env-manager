@@ -53,6 +53,7 @@ export interface OpenShellForward {
   localPort: number     // listener on this machine
   targetPort: number    // loopback port inside the sandbox
   bindAddress?: string  // default 127.0.0.1
+  remotePort?: number   // remote profiles: loopback port on the SSH host between the two hops; default localPort
 }
 
 export interface OpenShellWorkspaceMount {

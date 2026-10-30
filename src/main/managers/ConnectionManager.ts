@@ -3,6 +3,8 @@ import { spawn, ChildProcess } from 'child_process'
 import type { BrowserWindow } from 'electron'
 import type { Profile, ConnectionState, ConnectionStatus, PortForwardState } from '../../shared/types'
 import type { EventLogManager } from './EventLogManager'
+import { OpenShellForwards } from './OpenShellForwards'
+import { isOpenShell } from '../../shared/backend'
 
 interface ConnectionEntry {
   profileId: string
@@ -16,18 +18,45 @@ interface ConnectionEntry {
 export class ConnectionManager extends EventEmitter {
   private connections = new Map<string, ConnectionEntry>()
   private logger: EventLogManager
+  // Port forwards into OpenShell sandboxes; Docker profiles never have any.
+  private sandboxForwards: OpenShellForwards
 
   constructor(logger: EventLogManager) {
     super()
     this.logger = logger
+    this.sandboxForwards = new OpenShellForwards(logger, (profileId) => this.emitStateChange(profileId))
   }
 
   getState(profileId: string): ConnectionState | null {
-    return this.connections.get(profileId)?.state ?? null
+    const entry = this.connections.get(profileId)
+    return entry ? this.publicState(entry) : null
   }
 
   getAllStates(): ConnectionState[] {
-    return Array.from(this.connections.values()).map((c) => c.state)
+    return Array.from(this.connections.values()).map((c) => this.publicState(c))
+  }
+
+  /** The entry's state plus any sandbox forwards; the same object when there are none. */
+  private publicState(entry: ConnectionEntry): ConnectionState {
+    const extra = this.sandboxForwards.states(entry.profileId)
+    if (extra.length === 0) return entry.state
+    return { ...entry.state, portForwards: [...entry.state.portForwards, ...extra] }
+  }
+
+  /**
+   * Start (or restart now) the forwards of an OpenShell profile. Called once its
+   * sandbox is Ready: after launch and after Start/Unpause/Restart/Recreate.
+   */
+  startSandboxForwards(profile: Profile): void {
+    if (!isOpenShell(profile) || !profile.openshell!.forwards?.length) return
+    const status = this.connections.get(profile.id)?.state.status
+    if (status !== 'connected' && status !== 'degraded' && status !== 'reconnecting') return
+    this.sandboxForwards.start(profile)
+  }
+
+  /** Stop an OpenShell profile's forwards, e.g. when its sandbox is stopped on purpose. */
+  stopSandboxForwards(profileId: string): void {
+    this.sandboxForwards.stop(profileId)
   }
 
   async connect(profile: Profile, mainWindow: BrowserWindow): Promise<void> {
@@ -225,6 +254,7 @@ export class ConnectionManager extends EventEmitter {
   }
 
   async disconnect(profileId: string): Promise<void> {
+    this.sandboxForwards.stop(profileId)
     const entry = this.connections.get(profileId)
     if (!entry) return
 
@@ -293,10 +323,11 @@ export class ConnectionManager extends EventEmitter {
   private emitStateChange(profileId: string): void {
     const entry = this.connections.get(profileId)
     if (!entry) return
-    this.emit('stateChanged', profileId, entry.state)
+    const state = this.publicState(entry)
+    this.emit('stateChanged', profileId, state)
     try {
       if (entry.mainWindow && !entry.mainWindow.isDestroyed()) {
-        entry.mainWindow.webContents.send('connection:stateChanged', profileId, entry.state)
+        entry.mainWindow.webContents.send('connection:stateChanged', profileId, state)
       }
     } catch { /* window destroyed between check and send */ }
   }
