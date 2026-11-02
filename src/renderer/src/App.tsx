@@ -71,7 +71,7 @@ export default function App(): React.ReactElement {
     hydrateFromLastSession()
       .then((count) => {
         if (count > 0) {
-          toast(`Restored ${count} terminal${count > 1 ? 's' : ''} from your last session.`)
+          toast(`Restored ${count} terminal${count > 1 ? 's' : ''} from your last session.`, 'info')
         }
       })
       .catch((err) => toast(`Failed to restore last session: ${err}`))

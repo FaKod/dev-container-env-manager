@@ -181,7 +181,7 @@ export function TerminalTabs(): React.ReactElement {
       }
     }
     setTerminalHidden(terminalId, true)
-    toast('Terminal hidden — restore it from its profile card.')
+    toast('Terminal hidden — restore it from its profile card.', 'info')
   }
 
   async function handleSplit(direction: 'vertical' | 'horizontal'): Promise<void> {
@@ -241,7 +241,7 @@ export function TerminalTabs(): React.ReactElement {
       }
     }
     if (blocked.length > 0) {
-      toast('Reconnecting profile — click Reconnect All again when ready.')
+      toast('Reconnecting profile — click Reconnect All again when ready.', 'info')
     }
 
     let firstNewId: string | null = null
