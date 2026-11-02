@@ -987,6 +987,27 @@ Open:
    CLI path) are machine-specific.
 4. Remote forwards when the network drops (does `sshd` end the remote
    `forward service` after its timeout?).
-5. Full §5.1 Docker/SSH regression pass before merging.
+5. Full §5.1 Docker/SSH regression pass before merging. **In progress**
+   (0.0.88–0.0.89, test instance with `--config-dir`): blocks A (start without
+   OpenShell, stored profiles load unchanged), B (local Docker profile, all
+   existing-container behaviours, port mapping, `${projectName}` mount) and C
+   (contexts, terminal modes, split/tile/hide/detach, session restore,
+   drop/paste) pass. Open: D (lifecycle buttons, On App Close, export/import,
+   clone, projects), E (remote Docker over SSH), F (Docker + OpenShell side by
+   side, also on the same host).
+
+   Existing bugs found on the way (also on `main`):
+   - Sidebar crushed tiles with many profiles and no projects — **fixed**
+     (`848c738`).
+   - Session restore failed for a profile with several restored terminals
+     ("already connected or connecting") — **fixed** (`423e035`).
+   - `${cwd}` in a Docker workspace mount can't be set in the UI
+     (`pickWorkspace` has no caller), so the editor's default mount gives
+     `docker run -v :/workspace` → "invalid spec". Open.
+   - Export/import doesn't include projects; imported profiles end up without
+     a project. Open (planned for later).
+   - Terminal mode `attach` behaves like `smart` for the 2nd and later
+     terminals, although the editor says "attach (PID 1)". Open (needs a
+     decision: fix the code or the label).
 6. Confirm the provisional decisions (§8.2), decide on Vitest (§5).
 7. Optional: "Convert Docker profile to OpenShell" (Phase 7).
