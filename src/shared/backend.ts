@@ -50,9 +50,22 @@ export function sandboxSlug(name: string): string {
   return slug || 'sandbox'
 }
 
+/**
+ * DNS-1123 label as the gateway checks it (openshell-server validate_dns1123_label):
+ * lowercase letters, digits and hyphens, no leading/trailing or double hyphens.
+ */
+function isDnsLabel(name: string, maxLen: number): boolean {
+  return name.length <= maxLen && /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(name) && !name.includes('--')
+}
+
 /** Sandbox names the gateway accepts: a DNS-1123 label of at most 19 characters. */
 export function isValidSandboxName(name: string): boolean {
-  return name.length <= SANDBOX_NAME_MAX_LEN && /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(name)
+  return isDnsLabel(name, SANDBOX_NAME_MAX_LEN)
+}
+
+/** OpenShell workspace (namespace) names: a DNS-1123 label of at most 63 characters. */
+export function isValidWorkspaceName(name: string): boolean {
+  return isDnsLabel(name, 63)
 }
 
 /**

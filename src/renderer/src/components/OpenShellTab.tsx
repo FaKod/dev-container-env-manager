@@ -3,6 +3,7 @@ import type { Profile, OpenShellConfig, OpenShellForward } from '../../../shared
 import {
   SANDBOX_NAME_MAX_LEN,
   isValidSandboxName,
+  isValidWorkspaceName,
   joinCommand,
   looksLikeSecret,
   sandboxSlug,
@@ -112,7 +113,7 @@ export function OpenShellTab({ draft, onChange }: Props): React.ReactElement {
           placeholder={`${sandboxSlug(draft.name || 'sandbox')} (from the profile name)`}
         />
         <div style={hintStyle}>
-          Lowercase letters, digits and dashes, at most {SANDBOX_NAME_MAX_LEN} characters. It stays the same when the
+          Lowercase letters, digits and single dashes, at most {SANDBOX_NAME_MAX_LEN} characters. It stays the same when the
           profile is renamed; changing it points the profile at a different sandbox.
         </div>
         {nameInvalid && <div style={warnStyle}>Not a valid sandbox name.</div>}
@@ -535,13 +536,19 @@ export function OpenShellTab({ draft, onChange }: Props): React.ReactElement {
           </datalist>
         </div>
         <div className="form-group">
-          <label>Workspace</label>
+          <label>OpenShell Workspace</label>
           <input
             className="form-control mono"
             value={o.workspace ?? ''}
             onChange={(e) => set('workspace', e.target.value.trim() || undefined)}
             placeholder="default"
           />
+          <div style={hintStyle}>
+            A namespace on the gateway for sandboxes and providers, not a folder. Usually left empty.
+          </div>
+          {o.workspace && !isValidWorkspaceName(o.workspace) && (
+            <div style={warnStyle}>Lowercase letters, digits and single hyphens only.</div>
+          )}
         </div>
       </div>
       <div className="form-row">
@@ -592,6 +599,9 @@ export function validateOpenShell(draft: DraftProfile): string | null {
   if (!o) return null
   if (o.sandboxName && !isValidSandboxName(o.sandboxName)) {
     return `Sandbox name "${o.sandboxName}" is invalid: use lowercase letters, digits and dashes, at most ${SANDBOX_NAME_MAX_LEN} characters`
+  }
+  if (o.workspace && !isValidWorkspaceName(o.workspace)) {
+    return `OpenShell workspace "${o.workspace}" is invalid: it is a gateway namespace (lowercase letters, digits, single hyphens), not a folder. Leave it empty for the default`
   }
   if (o.template !== undefined) {
     if (!o.template) return 'Enter a template name, or choose Image'
