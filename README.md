@@ -14,6 +14,8 @@ FaKods Legendary DevContainer Manager is a **native Electron desktop application
 
 No more juggling windows. No more squinting at `docker ps` over SSH. No more "wait, which tab was staging?" Just connect, work, and ship.
 
+And when your agent deserves a tighter leash, switch a profile to an **NVIDIA OpenShell sandbox**: same tiles, same terminals, same port forwards, plus deny-by-default networking, filesystem policy and credentials the agent never gets to see.
+
 ---
 
 ## The Features (hold on to your keyboard)
@@ -35,6 +37,15 @@ No more juggling windows. No more squinting at `docker ps` over SSH. No more "wa
 - **Live port forward monitoring** — every tunnel shows active/inactive status in real time
 - **Auto-connect on startup** — flag a profile and the app reconnects and opens a terminal before you've finished your coffee
 - **Container behavior policy** per profile: attach-or-recreate, attach only, start if stopped, or scorched-earth always-recreate
+
+### OpenShell Sandboxes — Docker's security-conscious sibling
+- Pick **Environment → OpenShell sandbox** in any profile and it runs in an [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) sandbox instead of a plain container: filesystem rules, deny-by-default network egress, secrets injected as *providers*
+- Works **locally and on remote hosts** — for remote profiles the app drives the OpenShell CLI over your existing SSH settings, nothing new on your laptop
+- Create, start, stop, recreate and delete from the status panel; the app recovers sandboxes that crashed or whose main process ended
+- **Terminals** open their own shell in the sandbox (`exit` never takes the sandbox down); give the profile a *main command* like `claude` and the first terminal attaches to it
+- **Mount a project folder**, **port forwards** into the sandbox (from remote hosts too), **file drop and image paste** into sandbox terminals
+- A full **Sandbox tab** in the profile editor, with "Test connection" and providers/templates loaded straight from the gateway
+- Docker profiles stay exactly as they are — mix both kinds in the same project
 
 ### Terminal — where you'll actually live (and love it)
 - Full **xterm.js** terminal, Catppuccin-themed in dark *and* light
@@ -71,6 +82,7 @@ No more juggling windows. No more squinting at `docker ps` over SSH. No more "wa
 - Node.js 22+
 - `openssh-client` (for the SSH tunnels)
 - Docker on the remote host (or locally, for local machine mode)
+- Optional, for sandbox profiles: [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) **0.1.6 or newer** (CLI + gateway) on the machine that runs the sandboxes — see [OpenShell Sandboxes](#openshell-sandboxes)
 
 ### Install & Run
 
@@ -98,6 +110,8 @@ npm run dist:mac
 ```
 
 Produces separate `.dmg` files for Intel (`x64`) and Apple Silicon (`arm64`).
+
+The Linux AppImage runs on distributions with **glibc 2.34 or newer** (Ubuntu 22.04+, Debian 12+, RHEL 9+). The build checks this; see `CLAUDE.md`.
 
 ### Run a second instance with its own config
 
@@ -134,11 +148,15 @@ instances at the same time.
 │  └── DetachedTerminalApp — pop-out terminal windows     │
 ├─────────────────────────────────────────────────────────┤
 │  Main Process (Electron + Node.js)                      │
-│  ├── TerminalManager  — node-pty PTY sessions           │
-│  ├── SSHTunnelManager — SSH port forward tunnels        │
-│  ├── ProfileManager   — profiles + projects (JSON)      │
-│  ├── SessionManager   — terminal session persistence    │
-│  └── EventLogManager  — structured event logging        │
+│  ├── TerminalManager   — node-pty PTY sessions          │
+│  ├── ConnectionManager — SSH tunnels + port forwards    │
+│  │   └── OpenShellForwards — sandbox port forwards      │
+│  ├── ContainerBackend  — one interface, two backends:   │
+│  │   ├── ContainerManager — Docker (local / over SSH)   │
+│  │   └── OpenShellBackend — sandboxes via OpenShellCli  │
+│  ├── ProfileManager    — profiles + projects (JSON)     │
+│  ├── SessionManager    — terminal session persistence   │
+│  └── EventLogManager   — structured event logging       │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -190,6 +208,131 @@ The status panel shows **Local Machine** instead of SSH Connection, and the prof
 
 ---
 
+## OpenShell Sandboxes
+
+[NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) runs agents in sandboxes with a policy around them: which files they may touch, which hosts they may reach (nothing, by default) and which credentials they may use without ever seeing them. A **gateway** creates the sandboxes on Docker, Podman, MicroVMs or Kubernetes; the `openshell` CLI talks to it.
+
+An OpenShell profile behaves like a Docker profile — tile, status panel, terminals, port forwards, session restore — but the environment is a sandbox. Tested with **OpenShell 0.1.6** (Docker driver), locally and against a remote NVIDIA DGX Spark.
+
+### Where things have to be installed
+
+The app never talks to a gateway over the network itself. It runs the `openshell` CLI — directly for local profiles, over SSH for remote ones (just like `docker` today).
+
+| Profile | Runs the CLI | Install on your machine | Install on the remote host |
+|---|---|---|---|
+| Local | `openshell …` | OpenShell (CLI + gateway) + Docker/Podman | — |
+| Remote | `ssh host openshell …` | nothing new (`ssh` as today) | OpenShell (CLI + gateway) + Docker |
+
+### Setting up a host (local or remote)
+
+On the machine that should run the sandboxes, as the user the app connects as:
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh | sh
+openshell status          # should report "connected"
+```
+
+On Debian/Ubuntu the gateway runs as a **systemd user service**. On a remote host, keep it running when nobody is logged in:
+
+```bash
+sudo loginctl enable-linger $USER
+```
+
+For remote profiles, check from your machine that the app will find everything (the app uses non-interactive SSH with `BatchMode=yes`, so key login must work):
+
+```bash
+ssh -o BatchMode=yes myhost true && echo SSH OK
+ssh myhost 'command -v openshell; openshell --version'   # empty? set "CLI Path" in the profile
+ssh myhost openshell status -o json                       # "status": "connected"
+```
+
+### Creating a sandbox profile
+
+1. **New Profile** → General: name, and either *Local machine* or an SSH host (SSH tab).
+2. **Environment → OpenShell sandbox**.
+3. **Sandbox tab** — press **Test connection** first. Then, as needed:
+
+| Section | What it does |
+|---|---|
+| Sandbox | Sandbox name (lowercase, digits, single dashes, max 19 chars; stays fixed when you rename the profile), image *or* sandbox template, **main command**, restart policy, terminal shell |
+| Resources | CPU, memory, GPUs |
+| Workspace Folder | Mount a folder from the gateway host into the sandbox (e.g. `/home/you/project` → `/sandbox/project`) |
+| Port Forwards | `localhost:<local port>` → port inside the sandbox; for remote profiles also the port used on the host |
+| Environment Variables | Non-secret values only — the sandbox can read them (names like `*_TOKEN` get a warning) |
+| Providers | Credentials registered on the gateway (`openshell provider create`); load the list with *Load from gateway* |
+| Policy | Path to a policy YAML on the gateway host |
+| Gateway | Gateway name, OpenShell workspace (a gateway namespace — usually empty, **not** a folder), CLI path, compute driver, raw driver config JSON |
+
+Profiles can also be imported as JSON, e.g.:
+
+```json
+{
+  "name": "agent-box",
+  "ssh": { "host": "myhost", "forwards": [] },
+  "backend": "openshell",
+  "openshell": {
+    "sandboxName": "agent-box",
+    "workspaceMount": { "localPath": "/home/you/project", "targetPath": "/sandbox/project" },
+    "forwards": [{ "localPort": 8080, "targetPort": 3000, "remotePort": 18080 }],
+    "providers": ["github"]
+  }
+}
+```
+
+### Folder mounts need an opt-in on the gateway
+
+Gateways refuse folder mounts by default (*"caller driver config is disabled…"* — the app tells you what to change). On the gateway host, add to `~/.config/openshell/gateway.toml` (create the file if it doesn't exist):
+
+```toml
+[openshell]
+version = 2
+
+[openshell.drivers.docker]
+allow_driver_config = true
+enable_bind_mounts  = true
+
+[openshell.drivers.docker.resource_admission]
+enabled = false
+```
+
+```bash
+openshell-gateway config preflight --path ~/.config/openshell/gateway.toml
+systemctl --user restart openshell-gateway      # running sandboxes survive this
+```
+
+Files the sandbox creates in the folder belong to uid 1000 on the host.
+
+### How it differs from a Docker profile
+
+| | Docker profile | OpenShell profile |
+|---|---|---|
+| Terminal | `docker exec` / `docker attach` (terminal mode) | `openshell sandbox exec … --tty`: every terminal is its own shell, `exit` leaves the sandbox running. With a *main command*, the first terminal attaches to it |
+| Image `CMD` / `ENTRYPOINT` | Runs | Does not run — use the main command |
+| Port forwards | SSH `-L` + `docker -p` | One `openshell forward service` per forward; remote: one `ssh -tt -L …` process per forward that covers both hops |
+| Pause | `docker pause` | Suspend if the driver supports it — the Docker driver doesn't, so Pause **stops** the sandbox (open terminals close) |
+| Delete / Recreate | Removes the container; your mounted folder stays | Deletes the sandbox — files that aren't in a mounted folder are **lost** (the app asks first) |
+| File drop / image paste | `docker cp` | `openshell sandbox upload` (remote: via a temp file on the host) |
+| Network | Whatever Docker allows | **Nothing** by default — package installs and API calls fail until a policy allows them |
+
+### Security notes
+
+- **Mounted folders bypass the filesystem policy**: the sandbox can read and change everything in them. Mount the project, never your home directory; use *Read-only* where you can.
+- **Environment variables are visible** to everything in the sandbox. Put tokens and API keys into OpenShell providers instead.
+- **Images** must be standard Linux images (no distroless / `FROM scratch`). Sandboxes run as a non-root user (uid 1000); the default image has no `sudo` and no network, so bake the tools you need into your own image.
+
+### Troubleshooting
+
+| Message | Fix |
+|---|---|
+| *OpenShell CLI "openshell" not found on myhost* | Install OpenShell there, or set **CLI Path** (e.g. `~/.local/bin/openshell`) |
+| *No OpenShell gateway is registered* / *not reachable* | On that host: `openshell status`; `systemctl --user status openshell-gateway`; enable linger (see above) |
+| *does not allow folder mounts yet* | Add the `gateway.toml` opt-in above and restart the gateway |
+| *workspace name must contain only lowercase…* | You put a folder into **OpenShell Workspace** — clear it; folders go into *Workspace Folder* |
+| *…has ended and OpenShell could not restart it… Use Recreate* | The sandbox's main process exited and OpenShell 0.1.6 couldn't restart it in place — press **Recreate** |
+| Sandbox stuck in *starting* | Press **Recreate** (deleting works in every state) |
+
+---
+
 ## Auto-Connect on Startup
 
 Profiles can reconnect automatically when the app launches — resume a running container session with zero manual steps.
@@ -215,6 +358,8 @@ Controls what happens to an existing container when a profile is launched. Confi
 | `attach` | Attach only. Fails if the container is not already running. |
 | `start` | Start if stopped. Fails if the container doesn't exist. |
 | `recreate` | Always remove and recreate the container from scratch. |
+
+The same setting applies to OpenShell sandboxes. Keep in mind that recreating a sandbox loses every file in it that isn't in a mounted folder.
 
 ---
 

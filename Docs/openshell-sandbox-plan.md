@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | In progress: Phases 1–2 implemented, Phase 3 terminal part implemented (see [§8](#8-implementation-status)) |
+| **Status** | Phases 1–5 and 7 implemented and tested against a remote gateway (DGX Spark, OpenShell 0.1.6); open items in [§8.5](#85-next-steps) |
 | **Date** | 2026-10-29 |
 | **Source analysed** | [NVIDIA/OpenShell](https://github.com/NVIDIA/OpenShell) @ `d4e3226` (main, 2026-10-29), OpenShell 0.1.x |
 | **App version** | devenv-manager 0.0.73 |
@@ -644,7 +644,7 @@ Verify the assumptions this plan depends on, on a local Docker-driver gateway:
 - Profile export/import: include `openshell` block; policy *file paths* are machine-specific (warn on import).
 - **Acceptance:** a non-technical user can create a working sandbox profile from a preset without touching YAML.
 
-### Phase 6 — Remote hardening (D3-C)
+### Phase 6 — Remote hardening (D3-C)  *(mostly done 2026-11-02: diagnostics for a missing CLI, gateway problems and the mount opt-in; editor lists over SSH; README "Setting up a host". Open: network drop)*
 
 Remote support itself lands in Phases 2–4, because D3-C reuses the existing SSH
 plumbing. This phase covers what's left:
@@ -658,7 +658,7 @@ plumbing. This phase covers what's left:
 - README section "Remote OpenShell host setup": install CLI + gateway (or gateway container), register the gateway as the SSH user, optional bind-mount opt-in.
 - **Acceptance:** phases 2–4 scenarios pass against a remote host, and the remote Docker/SSH regression checklist (§5.1) still passes.
 
-### Phase 7 — Docs and polish
+### Phase 7 — Docs and polish  *(done 2026-11-02: README section "OpenShell Sandboxes", `ARCHITECTURE.md` "OpenShell Sandbox Backend"; the convert action is not done)*
 
 - README: prerequisites, tested OpenShell version, gateway setup, security notes (bind mounts, env vs providers).
 - Update `ARCHITECTURE.md` with the backend diagram.
@@ -974,9 +974,19 @@ gateway on an NVIDIA DGX Spark (arm64), reached by SSH (Tailscale name).
 
 ### 8.5 Next steps
 
-1. Finish Phase 0 (open items in §8.4): bind mounts, terminals in the app,
-   then a remote host.
-2. Run the §5.1 Docker/SSH regression checklist in the app.
-3. Phase 3 remainder: upload fallback + "Sync", and file staging via `sandbox upload`.
-4. Phase 4: forwards.
-5. Phase 5: editor UI.
+Done: Phases 1–5 and 7, Phase 0 except the items below, remote tests (§8.4.1).
+The Docker regression checks were done piecemeal (a local Docker profile with
+sysbox and a workspace mount, file drop into a Docker terminal), not the full
+§5.1 checklist.
+
+Open:
+1. D2 fallback: upload the workspace when the gateway doesn't allow folder
+   mounts, and a "Sync to sandbox" action (needs a directory-upload test).
+2. D5: policy presets, and showing denied connections in the LogViewer.
+3. Import: warn that paths in imported profiles (mount source, policy file,
+   CLI path) are machine-specific.
+4. Remote forwards when the network drops (does `sshd` end the remote
+   `forward service` after its timeout?).
+5. Full §5.1 Docker/SSH regression pass before merging.
+6. Confirm the provisional decisions (§8.2), decide on Vitest (§5).
+7. Optional: "Convert Docker profile to OpenShell" (Phase 7).
