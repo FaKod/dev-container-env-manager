@@ -1,7 +1,8 @@
 import { execFile } from 'child_process'
+import { createReadStream } from 'fs'
 import type { Profile, ContainerStatus } from '../../shared/types'
 import type { EventLogManager } from './EventLogManager'
-import { sshBatchOptions, sshTarget, remoteCommand } from './sshCommon'
+import { sshBatchOptions, sshTarget, remoteCommand, shq, shqPath } from './sshCommon'
 
 /**
  * The single place that spawns the `openshell` CLI (Docs/openshell-sandbox-plan.md §3.2).
@@ -187,11 +188,48 @@ export class OpenShellCli {
   /** Run the CLI and return trimmed stdout; throws OpenShellError on failure. */
   run(profile: Profile, args: string[], timeoutMs = 60_000): Promise<string> {
     const { command, args: argv } = this.commandFor(profile, args)
+    return this.exec(profile, command, argv, args, timeoutMs)
+  }
+
+  /**
+   * Copy one host file into the sandbox at `sandboxPath` (`sandbox upload`;
+   * a missing destination becomes the file's new name). Remote profiles stream
+   * the file over ssh into a temp file on the host first, upload that, and
+   * remove it again: the same two hops as the Docker branch of file staging.
+   */
+  upload(profile: Profile, hostPath: string, sandboxPath: string, timeoutMs = 60_000): Promise<string> {
+    const name = profile.openshell!.sandboxName
+    // --no-git-ignore: a dropped file inside a Git work tree must not be filtered out
+    const args = ['sandbox', 'upload', name, hostPath, sandboxPath, '--no-git-ignore']
+    if (profile.local) return this.run(profile, args, timeoutMs)
+
+    const upload = [
+      shqPath(this.cliPath(profile)),
+      ...[...this.globalArgs(profile), 'sandbox', 'upload', name].map(shq),
+      '"$t"',
+      shq(sandboxPath),
+      '--no-git-ignore'
+    ].join(' ')
+    const script =
+      't=$(mktemp) || exit 1; cat > "$t" || { rm -f "$t"; exit 1; }; ' +
+      `${upload}; rc=$?; rm -f "$t"; exit $rc`
+    const argv = [...sshBatchOptions(profile), sshTarget(profile), script]
+    return this.exec(profile, 'ssh', argv, args, timeoutMs, hostPath)
+  }
+
+  private exec(
+    profile: Profile,
+    command: string,
+    argv: string[],
+    args: string[],
+    timeoutMs: number,
+    stdinFile?: string
+  ): Promise<string> {
     const remote = !profile.local
     this.logger.debug('OpenShellCli', `exec: ${command} ${argv.join(' ')}`, profile.id)
 
     return new Promise((resolve, reject) => {
-      execFile(
+      const child = execFile(
         command,
         argv,
         {
@@ -214,6 +252,14 @@ export class OpenShellCli {
           reject(new OpenShellError(this.describe(profile, kind, stderr ?? '', failure.message), kind))
         }
       )
+      if (stdinFile && child.stdin) {
+        const input = createReadStream(stdinFile)
+        input.on('error', (err) => {
+          child.kill()
+          reject(new OpenShellError(`Cannot read ${stdinFile}: ${err.message}`, 'failed'))
+        })
+        input.pipe(child.stdin)
+      }
     })
   }
 

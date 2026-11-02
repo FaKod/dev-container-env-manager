@@ -762,8 +762,11 @@ prove Docker profiles never depend on it (§0.1 rule 3).
   - only the first terminal of a profile with a main command: `openshell sandbox connect N`;
   - remote profiles: the same command wrapped in `ssh -t host '…'`.
 - The `local`/`ssh` contexts use the existing code.
-- File drop / image paste into a sandbox terminal returns "not staged" for now
-  (no upload yet).
+- File drop / image paste into a sandbox terminal: `sandbox upload N <file>
+  /tmp/<name> --no-git-ignore` (`OpenShellCli.upload`). Remote profiles stream
+  the file over ssh into a `mktemp` file on the host, upload it from there and
+  remove it (one ssh call). The path is then typed into the terminal, as with
+  Docker. A failed upload is logged and the paste falls back to text.
 
 **After Phase 0: phase-aware lifecycle**
 
@@ -934,7 +937,7 @@ confirm or change.
 
 Still open from Phase 0:
 - two concurrent `connect`s, and closing the window while connected (only matters for profiles with a main command; all other terminals use `exec`);
-- upload (and the two-hop remote upload);
+- upload against a real gateway (file drop / image paste implemented, so far only tested against a fake CLI); the D2 upload fallback and "Sync to sandbox" are not implemented;
 - logs;
 - remote `forward service` over `ssh -tt` when the **network** drops (Disconnect and app quit are verified clean, §8.4.1).
 

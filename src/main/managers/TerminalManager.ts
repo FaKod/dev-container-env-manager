@@ -442,9 +442,18 @@ export class TerminalManager extends EventEmitter {
     targetPath: string
   ): Promise<{ path: string } | null> {
     const { profile, session } = entry
-    // Staging into OpenShell sandboxes (sandbox upload) is Phase 3 work; until
-    // then the renderer falls back to a plain-text paste.
-    if (isOpenShell(profile) && session.context === 'container') return null
+    // OpenShell sandbox: `sandbox upload`, directly or via the remote host (two
+    // hops, see OpenShellCli.upload). Uploads go through the gateway, so allow
+    // more time than a docker cp.
+    if (isOpenShell(profile) && session.context === 'container') {
+      try {
+        await this.openShellCli.upload(profile, hostPath, targetPath, 120_000)
+        return { path: targetPath }
+      } catch (err) {
+        this.logger.warn('TerminalManager', `Failed to upload file into sandbox: ${String(err)}`, profile.id)
+        return null
+      }
+    }
 
     // A terminal targets a container only when it was opened in 'container' context.
     const hasContainer = !!profile.container && session.context === 'container'
