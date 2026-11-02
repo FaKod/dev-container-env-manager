@@ -356,7 +356,12 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
       const profile = profileManager.getById(session.profileId)
       if (!profile) throw new Error(`Profile ${session.profileId} no longer exists`)
 
-      if (session.context !== 'local') await launchProfile(profile)
+      // Only the first restored terminal of a profile launches it. The others
+      // join the live connection: launching again would trip the duplicate-
+      // connection guard ("already connected or connecting").
+      const status = connectionManager.getState(profile.id)?.status
+      const live = status === 'connected' || status === 'connecting' || status === 'reconnecting' || status === 'degraded'
+      if (session.context !== 'local' && !live) await launchProfile(profile)
       return terminalManager.activateStub(terminalId, profile, cols, rows)
     }
   )
