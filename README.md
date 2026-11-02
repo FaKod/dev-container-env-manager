@@ -26,7 +26,7 @@ And when your agent deserves a tighter leash, switch a profile to an **NVIDIA Op
 - **Per-project compact mode** — sidebar getting crowded? Collapse any project's tiles down to icon + name + On/Off badge with one click. Expands just as fast, and every project remembers its own setting across restarts
 - **An icon catalog of ~160 hand-picked icons in 12 themed groups** — AI & Agents, Code & Dev, Infrastructure, Data, Docs, Media, Ops, Security, Business, Science, Life, even *Animals*. Give your coding agent a brain circuit, your database box a... database, and your chaos sandbox a ghost 👻
 - **16 accent colors** per profile, plus auto-coloring for the undecided — tiles glow green when connected, spin while connecting
-- **Import/export profiles as JSON** — ship your entire setup to a teammate in seconds
+- **Import/export profiles as JSON** — ship your entire setup to a teammate in seconds; *Export All* includes your projects, and importing puts every profile back into its project (existing projects with the same name are reused)
 - One-click **Clone** to duplicate a profile and tweak it
 
 ### SSH + Container Lifecycle — the heavy lifting, handled

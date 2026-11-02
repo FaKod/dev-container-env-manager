@@ -159,7 +159,59 @@ export class ProfileManager {
   }
 
   exportAll(): string {
-    return JSON.stringify({ profiles: this.getAll() }, null, 2)
+    return JSON.stringify({ projects: this.getProjects(), profiles: this.getAll() }, null, 2)
+  }
+
+  /**
+   * Import an export file: `{ projects?, profiles }` from Export All, or a single
+   * profile object. Projects are matched by name (an existing project with the
+   * same name is reused, so importing twice doesn't duplicate them) and the
+   * profiles' projectIds are remapped to the local projects. A projectId that
+   * doesn't resolve is dropped. A profile that fails validation is skipped and
+   * reported; the rest are still imported.
+   */
+  importAll(json: string): { profiles: Profile[]; projects: Project[]; errors: string[] } {
+    let data: unknown
+    try {
+      data = JSON.parse(json)
+    } catch {
+      throw new Error('Import failed: invalid JSON')
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      throw new Error('Import failed: expected a profile or an export file')
+    }
+    const bundle = data as { profiles?: unknown; projects?: unknown }
+    const profiles: unknown[] = Array.isArray(bundle.profiles) ? bundle.profiles : [data]
+    const exportedProjects: unknown[] = Array.isArray(bundle.projects) ? bundle.projects : []
+
+    // Exported project id → local project id
+    const projectIds = new Map<string, string>()
+    for (const raw of exportedProjects) {
+      const project = raw as Partial<Project>
+      if (typeof project?.name !== 'string' || !project.name.trim()) continue
+      const name = project.name.trim()
+      const existing = this.getProjects().find((p) => p.name.trim().toLowerCase() === name.toLowerCase())
+      const local = existing ?? this.createProject({ name })
+      if (typeof project.id === 'string') projectIds.set(project.id, local.id)
+    }
+
+    const localProjectIds = new Set(this.getProjects().map((p) => p.id))
+    const imported: Profile[] = []
+    const errors: string[] = []
+    for (const raw of profiles) {
+      const profile = raw as Partial<Profile>
+      const exportedProjectId = typeof profile?.projectId === 'string' ? profile.projectId : undefined
+      const projectId = exportedProjectId
+        ? (projectIds.get(exportedProjectId) ?? (localProjectIds.has(exportedProjectId) ? exportedProjectId : undefined))
+        : undefined
+      try {
+        imported.push(this.importProfile(JSON.stringify({ ...profile, projectId })))
+      } catch (err) {
+        const label = typeof profile?.name === 'string' && profile.name ? `"${profile.name}"` : 'a profile'
+        errors.push(`${label}: ${err instanceof Error ? err.message.replace(/^Import failed: /, '') : String(err)}`)
+      }
+    }
+    return { profiles: imported, projects: this.getProjects(), errors }
   }
 
   importProfile(json: string): Profile {

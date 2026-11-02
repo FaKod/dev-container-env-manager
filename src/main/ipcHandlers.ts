@@ -151,6 +151,7 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
   ipcMain.handle('profile:exportAll', () => profileManager.exportAll())
 
   ipcMain.handle('profile:import', (_e, json: string) => profileManager.importProfile(json))
+  ipcMain.handle('profile:importAll', (_e, json: string) => profileManager.importAll(json))
 
   ipcMain.handle('profile:moveToProject', (_e, profileId: string, projectId: string | undefined) =>
     profileManager.moveProfileToProject(profileId, projectId)

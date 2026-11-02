@@ -39,6 +39,10 @@ export const api = {
   importProfile: (json: string): Promise<Profile> =>
     ipcRenderer.invoke('profile:import', json),
 
+  /** Import an export file (profiles + projects) or a single profile. */
+  importProfiles: (json: string): Promise<{ profiles: Profile[]; projects: Project[]; errors: string[] }> =>
+    ipcRenderer.invoke('profile:importAll', json),
+
   pickWorkspace: (profileId: string): Promise<Profile | null> =>
     ipcRenderer.invoke('profile:pickWorkspace', profileId),
 

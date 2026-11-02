@@ -135,7 +135,7 @@ function ProjectSection({
 export function Sidebar(): React.ReactElement {
   const {
     profiles, setProfiles, upsertProfile,
-    projects, upsertProject, removeProject,
+    projects, setProjects, upsertProject, removeProject,
     openProfileEditor, theme, toggleTheme
   } = useAppStore()
 
@@ -280,15 +280,14 @@ export function Sidebar(): React.ReactElement {
     const text = await file.text()
     e.target.value = ''
     try {
-      const parsed = JSON.parse(text)
-      if (Array.isArray(parsed.profiles)) {
-        for (const p of parsed.profiles) {
-          const profile = await window.api.importProfile(JSON.stringify(p))
-          upsertProfile(profile)
-        }
-      } else {
-        const profile = await window.api.importProfile(text)
-        upsertProfile(profile)
+      const result = await window.api.importProfiles(text)
+      setProjects(result.projects)
+      for (const profile of result.profiles) upsertProfile(profile)
+      if (result.errors.length > 0) {
+        toast(`Import: ${result.errors.length} profile(s) skipped — ${result.errors.join('; ')}`)
+      }
+      if (result.profiles.length > 0) {
+        toast(`Imported ${result.profiles.length} profile${result.profiles.length > 1 ? 's' : ''}`, 'info')
       }
     } catch (err) {
       toast(`Import failed: ${err}`)

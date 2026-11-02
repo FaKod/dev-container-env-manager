@@ -1004,8 +1004,9 @@ Open:
    - `${cwd}` in a Docker workspace mount can't be set in the UI
      (`pickWorkspace` has no caller), so the editor's default mount gives
      `docker run -v :/workspace` → "invalid spec". Open.
-   - Export/import doesn't include projects; imported profiles end up without
-     a project. Open (planned for later).
+   - Export/import didn't include projects; imported profiles ended up without
+     a project. **Fixed**: Export All writes `{ projects, profiles }`; import
+     reuses projects by name and remaps the profiles' projectIds.
    - Terminal mode `attach` behaves like `smart` for the 2nd and later
      terminals, although the editor says "attach (PID 1)". Open (needs a
      decision: fix the code or the label).
