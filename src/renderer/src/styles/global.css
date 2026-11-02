@@ -234,6 +234,13 @@ html, body, #root {
   gap: 4px;
 }
 
+/* Never squeeze tiles to fit: scroll instead. Profile cards have overflow:
+   hidden, so as flex items their minimum height is 0 and many of them (e.g.
+   without projects, when they sit directly in the list) would be crushed and
+   overlap. */
+.profile-list > *,
+.project-profiles > * { flex-shrink: 0; }
+
 .profile-list::-webkit-scrollbar       { width: 4px; }
 .profile-list::-webkit-scrollbar-track { background: transparent; }
 .profile-list::-webkit-scrollbar-thumb { background: var(--surface1); border-radius: 2px; transition: background 0.2s; }
