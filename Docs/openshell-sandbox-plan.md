@@ -937,7 +937,7 @@ confirm or change.
 
 Still open from Phase 0:
 - two concurrent `connect`s, and closing the window while connected (only matters for profiles with a main command; all other terminals use `exec`);
-- upload against a real gateway (file drop / image paste implemented, so far only tested against a fake CLI); the D2 upload fallback and "Sync to sandbox" are not implemented;
+- upload of **directories** (single files verified via file drop, §8.4.1); the D2 upload fallback and "Sync to sandbox" are not implemented;
 - logs;
 - remote `forward service` over `ssh -tt` when the **network** drops (Disconnect and app quit are verified clean, §8.4.1).
 
@@ -970,6 +970,7 @@ gateway on an NVIDIA DGX Spark (arm64), reached by SSH (Tailscale name).
 | Port forward `localhost:8080 → host 127.0.0.1:18080 → sandbox :3000` (0.0.83) | ✅ `curl localhost:8080` on the laptop reaches a server in the sandbox |
 | Forward after Stop → Connect, sandbox starts in < 5 s (0.0.84 fix: start forwards while the tunnel is still `connecting`) | ✅ |
 | No leftover `forward service` processes on laptop or remote host after Disconnect and after quitting the app (`ssh -tt`) | ✅ |
+| File drop and image paste into a sandbox terminal (two-hop upload via the remote host, 0.0.87) | ✅ file lands in `/tmp`, no temp files left on the host; Docker terminals unchanged |
 
 ### 8.5 Next steps
 
