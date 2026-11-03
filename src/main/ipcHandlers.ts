@@ -277,10 +277,23 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
     connectionManager.startSandboxForwards(profile)
   }
 
+  // At most one launch per profile at a time. Auto-connect, Connect and the
+  // reconnect of restored terminals can overlap (a remote sandbox start takes
+  // seconds); a second request waits for the running launch instead of
+  // starting another one, which the duplicate-connection guard would refuse.
+  const launches = new Map<string, Promise<void>>()
+  function launchOnce(profile: Profile): Promise<void> {
+    const pending = launches.get(profile.id)
+    if (pending) return pending
+    const launch = launchProfile(profile).finally(() => launches.delete(profile.id))
+    launches.set(profile.id, launch)
+    return launch
+  }
+
   ipcMain.handle('connection:launch', async (_e, profileId: string) => {
     const profile = profileManager.getById(profileId)
     if (!profile) throw new Error(`Profile ${profileId} not found`)
-    await launchProfile(profile)
+    await launchOnce(profile)
   })
 
   ipcMain.handle('connection:connect', async (_e, profileId: string) => {
@@ -358,11 +371,16 @@ export function setupIpcHandlers(opts: SetupOptions): IpcHandles {
       if (!profile) throw new Error(`Profile ${session.profileId} no longer exists`)
 
       // Only the first restored terminal of a profile launches it. The others
-      // join the live connection: launching again would trip the duplicate-
-      // connection guard ("already connected or connecting").
-      const status = connectionManager.getState(profile.id)?.status
-      const live = status === 'connected' || status === 'connecting' || status === 'reconnecting' || status === 'degraded'
-      if (session.context !== 'local' && !live) await launchProfile(profile)
+      // wait for that launch, or join the live connection: launching again
+      // would trip the duplicate-connection guard ("already connected or
+      // connecting").
+      if (session.context !== 'local') {
+        const pending = launches.get(profile.id)
+        const status = connectionManager.getState(profile.id)?.status
+        const live = status === 'connected' || status === 'connecting' || status === 'reconnecting' || status === 'degraded'
+        if (pending) await pending
+        else if (!live) await launchOnce(profile)
+      }
       return terminalManager.activateStub(terminalId, profile, cols, rows)
     }
   )
