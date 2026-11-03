@@ -272,6 +272,13 @@ export function OpenShellTab({ draft, onChange }: Props): React.ReactElement {
               </label>
             </div>
           </div>
+          {o.driver === 'vm' && (
+            <div style={hintStyle}>
+              The MicroVM driver ignores CPU and memory here: every VM gets <code>vcpus</code> and{' '}
+              <code>mem_mib</code> from <code>[openshell.drivers.vm]</code> in the gateway&apos;s gateway.toml
+              (default 2 vCPUs, 2048 MiB).
+            </div>
+          )}
         </>
       )}
 
@@ -331,6 +338,9 @@ export function OpenShellTab({ draft, onChange }: Props): React.ReactElement {
           </div>
           {usesTemplate && (
             <div style={warnStyle}>A folder mount can&apos;t be combined with a template; put it into the template.</div>
+          )}
+          {o.driver === 'vm' && o.gpu && (
+            <div style={warnStyle}>The MicroVM driver can&apos;t mount folders into GPU sandboxes.</div>
           )}
         </>
       )}
@@ -615,6 +625,9 @@ export function validateOpenShell(draft: DraftProfile): string | null {
   }
   if (o.workspaceMount) {
     if (!o.workspaceMount.localPath.trim()) return 'Enter the folder to mount, or untick the folder mount'
+    if (o.driver === 'vm' && o.gpu) {
+      return 'The MicroVM driver can\'t mount folders into GPU sandboxes: remove the GPU or the folder mount'
+    }
     const cwd = workspaceMountProblem(draft, o.workspaceMount.localPath)
     if (cwd) return cwd
     const target = o.workspaceMount.targetPath.replace(/\/+$/, '')
