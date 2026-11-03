@@ -1010,7 +1010,7 @@ Open:
    clone, projects), E (remote Docker over SSH), F (Docker + OpenShell side by
    side, also on the same host).
 
-   Existing bugs found on the way (also on `main`):
+   Existing bugs found on the way (also on `main`), all fixed as of 0.1.4:
    - Sidebar crushed tiles with many profiles and no projects — **fixed**
      (`848c738`).
    - Session restore failed for a profile with several restored terminals
@@ -1035,6 +1035,6 @@ Open:
      (decision: code follows the label): in `attach` mode every container
      terminal runs `docker attach` (they mirror one process), locally and
      over SSH; the tab bar marks all of them as attached. `smart` and `exec`
-     are unchanged.
+     are unchanged. Verified in the app (0.1.4).
 6. Confirm the provisional decisions (§8.2), decide on Vitest (§5).
 7. Optional: "Convert Docker profile to OpenShell" (Phase 7).
