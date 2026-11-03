@@ -186,7 +186,9 @@ export class OpenShellForwards {
       f.lastOutput = err.message
     })
 
-    child.on('exit', (code, signal) => {
+    // 'close', not 'exit': it fires after stdout/stderr are drained, so the
+    // CLI's last line (the reason it stopped) has been seen.
+    child.on('close', (code, signal) => {
       if (f.child !== child) return // stopped or replaced
       f.child = null
       const wasActive = f.active
