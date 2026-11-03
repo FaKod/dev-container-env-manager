@@ -7,7 +7,8 @@ import {
   joinCommand,
   looksLikeSecret,
   sandboxSlug,
-  splitCommand
+  splitCommand,
+  workspaceMountProblem
 } from '../../../shared/backend'
 import { toast } from './Toast'
 
@@ -284,7 +285,7 @@ export function OpenShellTab({ draft, onChange }: Props): React.ReactElement {
             onChange={(e) =>
               set(
                 'workspaceMount',
-                e.target.checked ? { localPath: draft.local ? '${cwd}' : '', targetPath: '/sandbox/project' } : undefined
+                e.target.checked ? { localPath: '', targetPath: '/sandbox/project' } : undefined
               )
             }
           />
@@ -300,7 +301,7 @@ export function OpenShellTab({ draft, onChange }: Props): React.ReactElement {
                 className="form-control mono"
                 value={o.workspaceMount.localPath}
                 onChange={(e) => set('workspaceMount', { ...o.workspaceMount!, localPath: e.target.value })}
-                placeholder={draft.local ? '${cwd}' : '/home/you/project'}
+                placeholder="/home/you/project"
               />
             </div>
             <div className="form-group">
@@ -614,6 +615,8 @@ export function validateOpenShell(draft: DraftProfile): string | null {
   }
   if (o.workspaceMount) {
     if (!o.workspaceMount.localPath.trim()) return 'Enter the folder to mount, or untick the folder mount'
+    const cwd = workspaceMountProblem(draft, o.workspaceMount.localPath)
+    if (cwd) return cwd
     const target = o.workspaceMount.targetPath.replace(/\/+$/, '')
     if (!target.startsWith('/sandbox/')) return 'The mount path in the sandbox must be below /sandbox, e.g. /sandbox/project'
   }

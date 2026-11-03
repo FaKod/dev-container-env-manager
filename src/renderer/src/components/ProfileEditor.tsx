@@ -4,6 +4,7 @@ import { toast } from './Toast'
 import { showConfirm } from './ConfirmModal'
 import { PROFILE_ICON_GROUPS } from './profileIcons'
 import { OpenShellTab, validateOpenShell } from './OpenShellTab'
+import { workspaceMountProblem } from '../../../shared/backend'
 import type { Profile, PortForward } from '../../../shared/types'
 
 type DraftProfile = Omit<Profile, 'id' | 'createdAt' | 'updatedAt'>
@@ -43,7 +44,7 @@ function emptyDraft(): DraftProfile {
       image: '',
       runtime: '',
       ports: [],
-      workspaceMount: { localPath: '${cwd}', containerPath: '/workspace' },
+      workspaceMount: { localPath: '', containerPath: '/workspace' },
       workdir: '/workspace',
       interactive: true
     },
@@ -131,6 +132,9 @@ export function ProfileEditor(): React.ReactElement {
     if (sandbox) {
       const problem = validateOpenShell(draft)
       if (problem) { toast(problem); setActiveTab('sandbox'); return }
+    } else if (draft.container?.workspaceMount) {
+      const problem = workspaceMountProblem(draft, draft.container.workspaceMount.localPath)
+      if (problem) { toast(problem); setActiveTab('container'); return }
     }
 
     setSaving(true)
@@ -789,7 +793,7 @@ function ContainerTab({ draft, onChange }: TabProps): React.ReactElement {
                 localPath: e.target.value
               })
             }
-            placeholder="${cwd}"
+            placeholder="/home/you/project (empty = no mount)"
           />
         </div>
         <div className="form-group">
@@ -799,7 +803,7 @@ function ContainerTab({ draft, onChange }: TabProps): React.ReactElement {
             value={c.workspaceMount?.containerPath ?? '/workspace'}
             onChange={(e) =>
               updateContainer('workspaceMount', {
-                ...(c.workspaceMount ?? { localPath: '${cwd}' }),
+                ...(c.workspaceMount ?? { localPath: '' }),
                 containerPath: e.target.value
               })
             }

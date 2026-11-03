@@ -1,5 +1,5 @@
 import type { Profile, ContainerState, OpenShellConfig, OpenShellCheckResult } from '../../shared/types'
-import { expandWorkspacePath } from '../../shared/backend'
+import { expandWorkspacePath, workspaceMountProblem } from '../../shared/backend'
 import type { ContainerBackend } from './ContainerBackend'
 import type { EventLogManager } from './EventLogManager'
 import {
@@ -405,6 +405,8 @@ export class OpenShellBackend implements ContainerBackend {
     }
 
     if (o.workspaceMount) {
+      const problem = workspaceMountProblem(profile, o.workspaceMount.localPath)
+      if (problem) throw new Error(problem)
       const source = expandWorkspacePath(profile, o.workspaceMount.localPath)
       const target = o.workspaceMount.targetPath.replace(/\/+$/, '')
       if (!source.startsWith('/')) {

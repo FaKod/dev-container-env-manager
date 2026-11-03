@@ -36,6 +36,22 @@ export function expandWorkspacePath(profile: Profile, path: string): string {
     .replace('${projectName}', profile.name)
 }
 
+/**
+ * Why a workspace mount path can't be used, or null. `${cwd}` needs the
+ * profile's workspace folder, which the editor no longer offers; without it,
+ * `${cwd}` used to become "" (docker: "invalid spec") or "." (whatever
+ * directory docker ran in).
+ */
+export function workspaceMountProblem(profile: Pick<Profile, 'workspace'>, path: string): string | null {
+  if (path.includes('${cwd}') && !profile.workspace?.localPath?.trim()) {
+    return (
+      'The workspace mount uses ${cwd}, but this profile has no workspace folder. ' +
+      'Enter the folder to mount as an absolute path (${projectName} works too), or leave it empty for no mount.'
+    )
+  }
+  return null
+}
+
 /** OpenShell gateways reject sandbox names longer than this (openshell-server MAX_ROUTABLE_NAME_LEN). */
 export const SANDBOX_NAME_MAX_LEN = 19
 

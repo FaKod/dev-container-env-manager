@@ -57,7 +57,7 @@ export interface OpenShellForward {
 }
 
 export interface OpenShellWorkspaceMount {
-  localPath: string   // path on the gateway host; supports ${cwd} / ${projectName}
+  localPath: string   // path on the gateway host; supports ${projectName} (and ${cwd} if a workspace folder is stored)
   targetPath: string  // must be below /sandbox, not /sandbox itself
   readOnly?: boolean  // default false here (OpenShell's own default is true)
 }

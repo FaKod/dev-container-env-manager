@@ -1001,9 +1001,14 @@ Open:
      (`848c738`).
    - Session restore failed for a profile with several restored terminals
      ("already connected or connecting") — **fixed** (`423e035`).
-   - `${cwd}` in a Docker workspace mount can't be set in the UI
-     (`pickWorkspace` has no caller), so the editor's default mount gives
-     `docker run -v :/workspace` → "invalid spec". Open.
+   - `${cwd}` in a Docker workspace mount can't be set in the UI (the
+     "Local Workspace Path" field was removed in `31d9e64` "simpler profile"),
+     so the editor's default mount gave `docker run -v :/workspace` →
+     "invalid spec". **Fixed** (decision: keep the editor simple): new
+     profiles get an empty mount path; an empty path means no mount; `${cwd}`
+     without a stored workspace folder is refused on save and gives a clear
+     error on connect (Docker and OpenShell). Profiles that still have a
+     stored workspace folder keep working.
    - Export/import didn't include projects; imported profiles ended up without
      a project. **Fixed**: Export All writes `{ projects, profiles }`; import
      reuses projects by name and remaps the profiles' projectIds.

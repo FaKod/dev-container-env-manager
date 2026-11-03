@@ -3,6 +3,7 @@ import { promisify } from 'util'
 import type { Profile, ContainerState, ContainerStatus } from '../../shared/types'
 import type { EventLogManager } from './EventLogManager'
 import type { ContainerBackend } from './ContainerBackend'
+import { expandWorkspacePath, workspaceMountProblem } from '../../shared/backend'
 
 const execAsync = promisify(exec)
 
@@ -179,10 +180,11 @@ export class ContainerManager implements ContainerBackend {
     }
 
     if (c.workspaceMount) {
-      const local = c.workspaceMount.localPath
-        .replace('${cwd}', profile.workspace?.localPath ?? '.')
-        .replace('${projectName}', profile.name)
-      parts.push('-v', `${local}:${c.workspaceMount.containerPath}`)
+      const problem = workspaceMountProblem(profile, c.workspaceMount.localPath)
+      if (problem) throw new Error(problem)
+      const local = expandWorkspacePath(profile, c.workspaceMount.localPath)
+      // An empty path means no mount ("-v :/workspace" is rejected by docker)
+      if (local.trim()) parts.push('-v', `${local}:${c.workspaceMount.containerPath}`)
     }
 
     if (c.workdir) {
