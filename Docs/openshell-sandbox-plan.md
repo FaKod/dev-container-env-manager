@@ -1014,7 +1014,11 @@ Open:
    - Sidebar crushed tiles with many profiles and no projects — **fixed**
      (`848c738`).
    - Session restore failed for a profile with several restored terminals
-     ("already connected or connecting") — **fixed** (`423e035`).
+     ("already connected or connecting") — **fixed** (`423e035`). The same
+     error also came from overlapping launches (terminal Reconnect plus
+     Connect / badge / Reconnect All, while a remote sandbox starts) —
+     **fixed** in 0.1.3 (`1182ec4`): at most one launch per profile; later
+     requests wait for it. Verified on the DGX Spark with a MicroVM sandbox.
    - `${cwd}` in a Docker workspace mount can't be set in the UI (the
      "Local Workspace Path" field was removed in `31d9e64` "simpler profile"),
      so the editor's default mount gave `docker run -v :/workspace` →
