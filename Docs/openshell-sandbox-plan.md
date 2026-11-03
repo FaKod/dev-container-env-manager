@@ -1030,8 +1030,11 @@ Open:
    - Export/import didn't include projects; imported profiles ended up without
      a project. **Fixed**: Export All writes `{ projects, profiles }`; import
      reuses projects by name and remaps the profiles' projectIds.
-   - Terminal mode `attach` behaves like `smart` for the 2nd and later
-     terminals, although the editor says "attach (PID 1)". Open (needs a
-     decision: fix the code or the label).
+   - Terminal mode `attach` behaved like `smart` for the 2nd and later
+     terminals, although the editor says "attach (PID 1)". **Fixed**
+     (decision: code follows the label): in `attach` mode every container
+     terminal runs `docker attach` (they mirror one process), locally and
+     over SSH; the tab bar marks all of them as attached. `smart` and `exec`
+     are unchanged.
 6. Confirm the provisional decisions (§8.2), decide on Vitest (§5).
 7. Optional: "Convert Docker profile to OpenShell" (Phase 7).

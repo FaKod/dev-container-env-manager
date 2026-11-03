@@ -252,7 +252,9 @@ export class TerminalManager extends EventEmitter {
           (e) => e.session.profileId === profile.id && e.session.active
         ).length
 
-        if (activeForProfile === 0) {
+        // attach: every terminal attaches to PID 1 (they mirror each other);
+        // smart: only the first one, later terminals get their own shell
+        if (mode === 'attach' || activeForProfile === 0) {
           return {
             command: 'docker',
             args: ['attach', '--sig-proxy=false', '--detach-keys=', containerName]
@@ -301,7 +303,8 @@ export class TerminalManager extends EventEmitter {
         (e) => e.session.profileId === profile.id && e.session.active
       ).length
 
-      if (activeForProfile === 0) {
+      // attach: every terminal attaches to PID 1; smart: only the first one
+      if (mode === 'attach' || activeForProfile === 0) {
         return {
           command: 'ssh',
           args: [
@@ -315,7 +318,7 @@ export class TerminalManager extends EventEmitter {
           ]
         }
       }
-      // >0 active terminals already open — fall through to docker exec
+      // smart with >0 active terminals already open — fall through to docker exec
     }
 
     // exec (default): spawn a new shell inside the container

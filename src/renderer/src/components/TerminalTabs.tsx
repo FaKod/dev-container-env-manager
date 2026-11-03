@@ -296,10 +296,14 @@ export function TerminalTabs(): React.ReactElement {
       <div className="terminal-tabs-list">
       {!tileMode && visibleTerminals.map((t) => {
         const profile = profiles.find(p => p.id === t.profileId)
+        // Terminals attached to the container's main process: in attach mode
+        // every container terminal, in smart mode the profile's first one
+        const mode = profile?.container?.terminalMode ?? 'smart'
         const isPrimary =
           !!profile?.container &&
-          (profile.container.terminalMode ?? 'smart') !== 'exec' &&
-          terminals.find(other => other.profileId === t.profileId) === t
+          (mode === 'attach'
+            ? t.context === 'container'
+            : mode === 'smart' && terminals.find(other => other.profileId === t.profileId) === t)
         const tabColor = profileColorVar(profile)
         const isActive = activeTerminalId === t.id
         return (
