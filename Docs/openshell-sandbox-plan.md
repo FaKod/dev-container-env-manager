@@ -972,6 +972,20 @@ gateway on an NVIDIA DGX Spark (arm64), reached by SSH (Tailscale name).
 | No leftover `forward service` processes on laptop or remote host after Disconnect and after quitting the app (`ssh -tt`) | ✅ |
 | File drop and image paste into a sandbox terminal (two-hop upload via the remote host, 0.0.87) | ✅ file lands in `/tmp`, no temp files left on the host; Docker terminals unchanged |
 
+### 8.4.2 MicroVM driver (DGX Spark, OpenShell 0.1.6, 2026-11-03)
+
+| Check | Result | Consequence in the app |
+|---|---|---|
+| Driver install | Part of the Ubuntu package (`/usr/libexec/openshell/openshell-driver-vm`); `compute_driver = "vm"` in gateway.toml, never auto-detected | README "MicroVM driver" |
+| KVM | `/dev/kvm` is `root:kvm` 0660 (+ seat ACL). Without `kvm` group membership of the gateway user, create failed with *"ProcessExited: VM process exited with status 1"*. After `usermod -aG kvm` and restarting the user manager: works | README + troubleshooting |
+| **Switching the compute driver** | The new driver doesn't know the other driver's sandboxes: *"Cannot start sandbox: backend resource is missing"*, then *"Removing sandbox from store after it disappeared from the compute driver snapshot"*. Switching back does not restore them; the Docker containers are orphaned | README warning; a profile then gets a new sandbox on Connect (`not-found` → create) |
+| Create / stop / start | Create < 1 s (image prepared), stop ~5 s, start < 1 s; guest kernel `6.12.109` | ✓ |
+| Suspend | *"compute driver does not support sandbox suspend"* (same as Docker) | Pause → stop fallback ✓ |
+| virtiofs mount | `--driver-config-json '{"vm":{"mounts":[…]}}'` works both ways; files created in the VM are owned by 1000 = gateway user | Profile *Compute Driver = vm* puts the mount under the `vm` key ✓ |
+| CPU / memory | `--cpu` / `--memory` are **ignored**; every VM gets `[openshell.drivers.vm] vcpus` / `mem_mib` (default 2 / 2048 MiB): `free` showed ~2 GB with 8Gi requested | Editor hint for driver `vm` |
+| App end to end (0.1.1, remote) | Terminal, folder mount, port forward (`curl` through both hops), file drop / paste, Stop / Connect / Recreate | ✓ |
+| GPU + mounts | Not combinable (mounts need the libkrun backend) — from the docs, not tested | Editor refuses on save |
+
 ### 8.5 Next steps
 
 Done: Phases 1–5 and 7, Phase 0 except the items below, remote tests (§8.4.1).

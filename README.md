@@ -297,10 +297,51 @@ enabled = false
 
 ```bash
 openshell-gateway config preflight --path ~/.config/openshell/gateway.toml
-systemctl --user restart openshell-gateway      # running sandboxes survive this
+systemctl --user restart openshell-gateway      # running sandboxes survive this (same compute driver)
 ```
 
 Files the sandbox creates in the folder belong to uid 1000 on the host.
+
+### MicroVM driver
+
+Instead of containers, a gateway can run every sandbox in its own lightweight VM (libkrun, KVM). Tested on a DGX Spark (arm64): create in about a second once the image is prepared, stop in ~5 s, start in under a second.
+
+1. **KVM access for the gateway user.** `/dev/kvm` usually belongs to the `kvm` group:
+   ```bash
+   sudo usermod -aG kvm $USER
+   sudo systemctl restart user@$(id -u).service   # the gateway user service picks up the group; ends your sessions
+   id | grep -o kvm
+   ```
+   Without it, creating a sandbox fails with *"VM process exited with status 1"*.
+2. **Select the driver** in `~/.config/openshell/gateway.toml` (the Ubuntu package already ships the driver):
+   ```toml
+   [openshell.gateway]
+   compute_driver = "vm"
+
+   [openshell.drivers.vm]
+   vcpus   = 4          # every VM gets this — default 2
+   mem_mib = 8192       # default 2048
+   # folder mounts, as for Docker:
+   allow_driver_config = true
+   enable_bind_mounts  = true
+
+   [openshell.drivers.vm.resource_admission]
+   enabled = false
+   ```
+   then `openshell-gateway config preflight --path ~/.config/openshell/gateway.toml` and `systemctl --user restart openshell-gateway`.
+3. **In the profile:** Sandbox tab → *Compute Driver* **vm (MicroVM)**, so a folder mount is sent to the VM driver.
+
+> ⚠️ **A gateway runs one driver at a time.** After switching `compute_driver`, the gateway forgets every sandbox of the other driver (it removes them from its store; switching back does not bring them back). Their profiles get a *new* sandbox on the next Connect — files that weren't in a mounted folder are gone. Switch only on a gateway whose sandboxes you don't need, or run a separate gateway per driver.
+
+Differences to the Docker driver:
+
+| | MicroVM |
+|---|---|
+| CPU / memory in the profile | **Ignored** — set `vcpus` / `mem_mib` for the gateway (applies to every VM, on its next start) |
+| Folder mounts | virtiofs; directories only, up to 32 per sandbox on arm64 (3 on x86_64); not with GPU sandboxes; the sandbox uid/gid (default 1000) must match the gateway user for writes (`sandbox_uid` / `sandbox_gid` otherwise) |
+| GPU | One GPU via `gpu_device_ids` in the driver config |
+| Suspend / Pause | Not supported either — Pause stops the sandbox |
+| Default image | `nvcr.io/nvidia/base/ubuntu:24.04`; the sandbox home is always `/sandbox` |
 
 ### How it differs from a Docker profile
 
@@ -330,6 +371,8 @@ Files the sandbox creates in the folder belong to uid 1000 on the host.
 | *workspace name must contain only lowercase…* | You put a folder into **OpenShell Workspace** — clear it; folders go into *Workspace Folder* |
 | *…has ended and OpenShell could not restart it… Use Recreate* | The sandbox's main process exited and OpenShell 0.1.6 couldn't restart it in place — press **Recreate** |
 | Sandbox stuck in *starting* | Press **Recreate** (deleting works in every state) |
+| *VM process exited with status 1* (MicroVM driver) | The gateway user can't open `/dev/kvm` — see [MicroVM driver](#microvm-driver) |
+| A sandbox profile suddenly creates a new sandbox | The gateway's compute driver was switched, so it forgot the old sandbox — see [MicroVM driver](#microvm-driver) |
 
 ---
 
